@@ -29,12 +29,17 @@ def fetch_corpus(repo_url: str, tag: str, dest: Path) -> Path:
         if not (dest / ".git").exists():
             raise CorpusError(f"destination {dest} exists but is not a git checkout")
 
-        head = _git("rev-parse", "HEAD", cwd=dest)
-        tagged_commit = _git(
-            "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}", cwd=dest
+        wrong_version = (
+            f"destination {dest} is not checked out at tag {tag}; delete it and run again"
         )
-        if head != tagged_commit:
-            raise CorpusError(
-                f"destination {dest} is not checked out at tag {tag}"
+        try:
+            head = _git("rev-parse", "HEAD", cwd=dest)
+            tagged_commit = _git(
+                "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}", cwd=dest
             )
+        except CorpusError as e:
+            raise CorpusError(wrong_version) from e
+        if head != tagged_commit:
+            raise CorpusError(wrong_version)
     return dest
+
