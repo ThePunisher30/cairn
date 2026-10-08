@@ -19,7 +19,8 @@ def test_expected_folders_exist(folder):
 
 
 def test_gitignore_covers_the_essentials():
-    lines = {line.strip() for line in (ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()}
+    text = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    lines = {line.strip() for line in text.splitlines()}
     for pattern in [".venv/", "__pycache__/", ".env", "data/raw/"]:
         assert pattern in lines, f"{pattern!r} missing from .gitignore"
 
