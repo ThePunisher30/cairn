@@ -1,0 +1,16 @@
+# Python environments and caches
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Secrets: never commit these
+.env
+
+# Downloaded data (the fetch script re-creates it)
+data/raw/
+
+# Private study folder, not part of the project
+learn/
