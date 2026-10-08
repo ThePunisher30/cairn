@@ -14,7 +14,7 @@
 
 ## Step 1. Git repo, `.gitignore`, `.env.example`
 ```powershell
-cd C:\Users\Aniruddh\cairn
+cd path\to\cairn
 git init -b main
 ```
 - **`.gitignore`** must contain these lines (tests check them): `.venv/`, `__pycache__/`, `.env`, `data/raw/`. Also add `*.pyc`, `.pytest_cache/`, `.ruff_cache/`, `*.egg-info/`, and `learn/` (your lesson exercises are private study notes, not part of the project).
