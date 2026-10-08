@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "cairn"
 version = "0.1.0"
 description = "A from-scratch RAG engine over a codebase and its docs: BM25, embeddings, HNSW, hybrid retrieval, citations, evaluation."
-requires-python = ">=3.11" 
+requires-python = ">=3.11"
 dependencies = [
     "numpy>=2.0",
 ]
