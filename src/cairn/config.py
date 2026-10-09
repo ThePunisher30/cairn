@@ -1,4 +1,5 @@
 """Settings for Cairn, read from environment variables."""
+
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -39,9 +40,7 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     raw_level = _read(env, "CAIRN_LOG_LEVEL")
     log_level = (raw_level or "INFO").upper()
     if log_level not in LOG_LEVELS:
-        raise ConfigError(
-            f"CAIRN_LOG_LEVEL must be one of {sorted(LOG_LEVELS)}, got {raw_level!r}"
-        )
+        raise ConfigError(f"CAIRN_LOG_LEVEL must be one of {sorted(LOG_LEVELS)}, got {raw_level!r}")
 
     raw_top_k = _read(env, "CAIRN_TOP_K")
     if raw_top_k is None:
@@ -59,7 +58,8 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         embedding_model=_read(env, "CAIRN_EMBEDDING_MODEL") or "BAAI/bge-small-en-v1.5",
         top_k=top_k,
         log_level=log_level,
-        corpus_repo_url=_read(env, "CAIRN_CORPUS_REPO_URL") or "https://github.com/fastapi/fastapi.git",
+        corpus_repo_url=_read(env, "CAIRN_CORPUS_REPO_URL")
+        or "https://github.com/fastapi/fastapi.git",
         corpus_tag=_read(env, "CAIRN_CORPUS_TAG") or "0.143.0",
         anthropic_api_key=_read(env, "ANTHROPIC_API_KEY"),
     )

@@ -28,8 +28,7 @@ class Hit:
 
 
 class Retriever(Protocol):
-    def search(self, query: str, k: int) -> list[Hit]:
-        ...
+    def search(self, query: str, k: int) -> list[Hit]: ...
 
 
 @dataclass(frozen=True)
