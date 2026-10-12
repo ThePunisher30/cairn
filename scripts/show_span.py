@@ -13,6 +13,8 @@ from cairn.config import load_settings
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Windows consoles default to a legacy encoding: never crash on characters like arrows or emoji.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     parser = argparse.ArgumentParser(description="Show numbered lines of a corpus file.")
     parser.add_argument("path", help="path inside the corpus folder, with forward slashes")
     parser.add_argument("start", type=int, help="first line to show (1-based)")
