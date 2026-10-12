@@ -1,4 +1,5 @@
 """Phase 0: settings come from environment variables, are validated, and never leak the API key."""
+
 import dataclasses
 
 import pytest
@@ -30,18 +31,20 @@ def test_defaults_when_nothing_is_set():
 
 
 def test_environment_overrides_defaults():
-    s = load_settings({
-        "CAIRN_DATA_DIR": "somewhere",
-        "CAIRN_EMBEDDING_MODEL": "other/model",
-        "CAIRN_TOP_K": "7",
-        "CAIRN_LOG_LEVEL": "debug",
-        "CAIRN_CORPUS_REPO_URL": "https://example.com/repo.git",
-        "CAIRN_CORPUS_TAG": "1.2.3",
-    })
+    s = load_settings(
+        {
+            "CAIRN_DATA_DIR": "somewhere",
+            "CAIRN_EMBEDDING_MODEL": "other/model",
+            "CAIRN_TOP_K": "7",
+            "CAIRN_LOG_LEVEL": "debug",
+            "CAIRN_CORPUS_REPO_URL": "https://example.com/repo.git",
+            "CAIRN_CORPUS_TAG": "1.2.3",
+        }
+    )
     assert str(s.data_dir) == "somewhere"
     assert s.embedding_model == "other/model"
     assert s.top_k == 7
-    assert s.log_level == "DEBUG"          # normalised to upper case
+    assert s.log_level == "DEBUG"  # normalised to upper case
     assert s.corpus_repo_url == "https://example.com/repo.git"
     assert s.corpus_tag == "1.2.3"
 
@@ -58,13 +61,16 @@ def test_valid_log_levels(level):
     assert load_settings({"CAIRN_LOG_LEVEL": level}).log_level == level.upper()
 
 
-@pytest.mark.parametrize("env,variable", [
-    ({"CAIRN_TOP_K": "abc"}, "CAIRN_TOP_K"),
-    ({"CAIRN_TOP_K": "0"}, "CAIRN_TOP_K"),
-    ({"CAIRN_TOP_K": "-3"}, "CAIRN_TOP_K"),
-    ({"CAIRN_TOP_K": "2.5"}, "CAIRN_TOP_K"),
-    ({"CAIRN_LOG_LEVEL": "LOUD"}, "CAIRN_LOG_LEVEL"),
-])
+@pytest.mark.parametrize(
+    "env,variable",
+    [
+        ({"CAIRN_TOP_K": "abc"}, "CAIRN_TOP_K"),
+        ({"CAIRN_TOP_K": "0"}, "CAIRN_TOP_K"),
+        ({"CAIRN_TOP_K": "-3"}, "CAIRN_TOP_K"),
+        ({"CAIRN_TOP_K": "2.5"}, "CAIRN_TOP_K"),
+        ({"CAIRN_LOG_LEVEL": "LOUD"}, "CAIRN_LOG_LEVEL"),
+    ],
+)
 def test_invalid_values_raise_config_error_naming_the_variable(env, variable):
     with pytest.raises(ConfigError, match=variable):
         load_settings(env)

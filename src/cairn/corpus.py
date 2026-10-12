@@ -8,9 +8,7 @@ class CorpusError(Exception):
 
 def _git(*args: str, cwd: Path | None = None) -> str:
     try:
-        result = subprocess.run(
-            ["git", *args], cwd=cwd, check=True, capture_output=True, text=True
-        )
+        result = subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True, text=True)
     except subprocess.CalledProcessError as e:
         raise CorpusError(f"git {' '.join(args)} failed: {e.stderr.strip()}") from e
     return result.stdout.strip()
@@ -34,12 +32,9 @@ def fetch_corpus(repo_url: str, tag: str, dest: Path) -> Path:
         )
         try:
             head = _git("rev-parse", "HEAD", cwd=dest)
-            tagged_commit = _git(
-                "rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}", cwd=dest
-            )
+            tagged_commit = _git("rev-parse", "--verify", f"refs/tags/{tag}^{{commit}}", cwd=dest)
         except CorpusError as e:
             raise CorpusError(wrong_version) from e
         if head != tagged_commit:
             raise CorpusError(wrong_version)
     return dest
-

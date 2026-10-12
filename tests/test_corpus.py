@@ -3,6 +3,7 @@
 These tests build a tiny git repository on disk (with tags 1.0.0 and 2.0.0) and fetch from that
 instead of GitHub.
 """
+
 import subprocess
 import sys
 
@@ -15,8 +16,16 @@ SCRIPT = config.PROJECT_ROOT / "scripts" / "fetch_corpus.py"
 
 
 def git(*args, cwd):
-    cmd = ["git", "-c", "user.name=t", "-c", "user.email=t@example.com",
-           "-c", "commit.gpgsign=false", *args]
+    cmd = [
+        "git",
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        *args,
+    ]
     return subprocess.run(cmd, cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 
 
@@ -40,7 +49,7 @@ def text_of(dest):
 
 
 def test_fetch_checks_out_the_requested_tag(origin, tmp_path):
-    dest = tmp_path / "raw" / "fastapi"            # the parent folder "raw" does not exist yet
+    dest = tmp_path / "raw" / "fastapi"  # the parent folder "raw" does not exist yet
     result = fetch_corpus(origin.as_uri(), "1.0.0", dest)
     assert result == dest
     assert "version one" in text_of(dest)
@@ -52,7 +61,7 @@ def test_second_call_is_a_no_op_that_keeps_existing_files(origin, tmp_path):
     fetch_corpus(origin.as_uri(), "1.0.0", dest)
     marker = dest / "marker.txt"
     marker.write_text("keep me", encoding="utf-8")
-    fetch_corpus(origin.as_uri(), "1.0.0", dest)   # must not fail and must not re-clone
+    fetch_corpus(origin.as_uri(), "1.0.0", dest)  # must not fail and must not re-clone
     assert marker.exists()
 
 
@@ -61,7 +70,7 @@ def test_existing_checkout_of_a_different_tag_is_refused_and_left_alone(origin, 
     fetch_corpus(origin.as_uri(), "1.0.0", dest)
     with pytest.raises(CorpusError, match="2.0.0"):
         fetch_corpus(origin.as_uri(), "2.0.0", dest)
-    assert "version one" in text_of(dest)           # nothing was deleted or changed
+    assert "version one" in text_of(dest)  # nothing was deleted or changed
 
 
 def test_existing_folder_that_is_not_a_checkout_is_refused_and_left_alone(origin, tmp_path):

@@ -1,4 +1,5 @@
 """Phase 0: does the project skeleton exist and is it set up sensibly?"""
+
 import tomllib
 
 import pytest

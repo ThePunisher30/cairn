@@ -94,7 +94,9 @@ cairn/
 │   ├── agent/                # tools.py, loop.py, trace.py
 │   ├── serve/                # app.py, schemas.py, cache.py, ratelimit.py, jobs.py, logging.py, metrics.py
 │   └── indexing/             # manifest.py, incremental.py
-├── eval/                     # questions.jsonl, metrics.py, run.py, gen_eval.py, judge.py, failures/
+├── eval/                     # DATA only: questions.jsonl, test_set_runs.log, failures/
+│                             # (evaluation CODE lives in src/cairn/evaluation/: metrics, questions,
+│                             #  baselines, harness, later gen_eval and judge; runners in scripts/)
 ├── bench/                    # ann.py, load_test.py, frameworks/ (Phase 11)
 ├── scripts/                  # fetch_corpus.py, make_scale_set.py
 ├── tests/                    # I write these per phase, you make them pass
@@ -137,8 +139,8 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
   - *code lookup* ("where is X implemented", "what does Y do").
 - Gold labels at the **source level**: `(file, start_line, end_line)`, **not** chunk IDs. Chunk boundaries will change in every experiment, so gold must survive re-chunking. A retrieved chunk is a **hit** if its line range overlaps a gold span.
 - Stratified **dev/test split (about 70/30)**. The test set is frozen: you may run it exactly twice, once after Phase 6 and once in Phase 11.
-- `eval/metrics.py`: `hit_at_k`, `recall_at_k`, `mrr`, `ndcg_at_k`.
-- `eval/run.py`: takes any object implementing `Retriever.search(query, k) -> list[Hit]` and prints a table by category, latency p50/p95, and a per-question failure list.
+- `src/cairn/evaluation/metrics.py`: `hit_at_k`, `recall_at_k`, `reciprocal_rank` (MRR), `ndcg_at_k`.
+- `src/cairn/evaluation/harness.py` and `scripts/run_eval.py`: take any object implementing `Retriever.search(query, k) -> list[Hit]` and prints a table by category, latency p50/p95, and a per-question failure list.
 - Two dumb baselines (random, first-N chunks) to prove the harness can tell good from bad.
 
 **Learn:** information-retrieval metrics, why evals come first, labeling bias, why gold must be defined independently of the system under test.
