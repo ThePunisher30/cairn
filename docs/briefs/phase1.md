@@ -7,7 +7,7 @@
 **You write all the code and all the questions. The tests are already in `tests/` and currently fail** (about 155 tests in total, 121 of them new).
 
 **Done when**
-- `C:\Users\Aniruddh\cairn` full test suite is green, **with no skipped tests** in `tests/test_question_set.py` (a skip means your question file or the corpus is missing)
+- the full test suite is green, **with no skipped tests** in `tests/test_question_set.py` (a skip means your question file or the corpus is missing)
 - `ruff check .` is clean
 - `eval/questions.jsonl` has 60 valid questions
 - `docs/results.md` has your baseline table (random, first-N, oracle)
@@ -66,7 +66,7 @@ If the oracle doesn't get 1.0, your harness or metrics have a bug. If random sco
 Work on the branch `phase-1-yardstick`. Steps 1-4 first (the foundations, about 2-3 days). Then alternate between Step 5 (writing questions, in batches of 5-8) and Steps 6-8. Commit after each step.
 
 ```powershell
-cd C:\Users\Aniruddh\cairn
+cd path\to\cairn
 git switch main
 git pull
 git switch -c phase-1-yardstick
