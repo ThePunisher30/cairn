@@ -1,4 +1,5 @@
 """Phase 1, step 8: the command-line runner scripts/run_eval.py."""
+
 import json
 import subprocess
 import sys
@@ -17,12 +18,27 @@ def workspace(tmp_path):
     body = "".join(f"line {i}\n" for i in range(1, 11))
     (corpus / "docs" / "a.md").write_text(body, encoding="utf-8")
     rows = [
-        {"id": "q1", "category": "lexical", "split": "dev", "question": "What is line 4?",
-         "gold": [{"path": "docs/a.md", "start_line": 3, "end_line": 5}]},
-        {"id": "q2", "category": "code", "split": "dev", "question": "Where is line 8?",
-         "gold": [{"path": "docs/a.md", "start_line": 8, "end_line": 8}]},
-        {"id": "q3", "category": "semantic", "split": "test", "question": "Held out?",
-         "gold": [{"path": "docs/a.md", "start_line": 1, "end_line": 2}]},
+        {
+            "id": "q1",
+            "category": "lexical",
+            "split": "dev",
+            "question": "What is line 4?",
+            "gold": [{"path": "docs/a.md", "start_line": 3, "end_line": 5}],
+        },
+        {
+            "id": "q2",
+            "category": "code",
+            "split": "dev",
+            "question": "Where is line 8?",
+            "gold": [{"path": "docs/a.md", "start_line": 8, "end_line": 8}],
+        },
+        {
+            "id": "q3",
+            "category": "semantic",
+            "split": "test",
+            "question": "Held out?",
+            "gold": [{"path": "docs/a.md", "start_line": 1, "end_line": 2}],
+        },
     ]
     questions = tmp_path / "questions.jsonl"
     questions.write_text("\n".join(json.dumps(r) for r in rows) + "\n", encoding="utf-8")
@@ -31,10 +47,14 @@ def workspace(tmp_path):
 
 def run(ws, *extra):
     args = [
-        sys.executable, str(SCRIPT),
-        "--questions", str(ws["questions"]),
-        "--corpus", str(ws["corpus"]),
-        "--test-log", str(ws["log"]),
+        sys.executable,
+        str(SCRIPT),
+        "--questions",
+        str(ws["questions"]),
+        "--corpus",
+        str(ws["corpus"]),
+        "--test-log",
+        str(ws["log"]),
         *extra,
     ]
     return subprocess.run(args, capture_output=True, text=True)

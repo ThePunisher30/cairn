@@ -7,6 +7,7 @@ Vocabulary
 - Credit rule: walking down the ranking, a hit is RELEVANT only if it overlaps at least one gold
   span that no earlier hit had already covered. Repeats of an already-covered span earn nothing.
 """
+
 import math
 
 import pytest
@@ -32,15 +33,18 @@ def S(path, a, b):
 
 
 # ---------------------------------------------------------------- overlaps
-@pytest.mark.parametrize("a,b,expected", [
-    (("f.md", 1, 10), ("f.md", 5, 15), True),      # partial overlap
-    (("f.md", 1, 10), ("f.md", 10, 20), True),     # share exactly one line (ranges are inclusive)
-    (("f.md", 1, 10), ("f.md", 11, 20), False),    # adjacent, no shared line
-    (("f.md", 1, 10), ("g.md", 1, 10), False),     # same lines, different file
-    (("f.md", 1, 100), ("f.md", 40, 50), True),    # one contains the other
-    (("f.md", 7, 7), ("f.md", 7, 7), True),        # single lines
-    (("f.md", 7, 7), ("f.md", 8, 8), False),
-])
+@pytest.mark.parametrize(
+    "a,b,expected",
+    [
+        (("f.md", 1, 10), ("f.md", 5, 15), True),  # partial overlap
+        (("f.md", 1, 10), ("f.md", 10, 20), True),  # share exactly one line (ranges are inclusive)
+        (("f.md", 1, 10), ("f.md", 11, 20), False),  # adjacent, no shared line
+        (("f.md", 1, 10), ("g.md", 1, 10), False),  # same lines, different file
+        (("f.md", 1, 100), ("f.md", 40, 50), True),  # one contains the other
+        (("f.md", 7, 7), ("f.md", 7, 7), True),  # single lines
+        (("f.md", 7, 7), ("f.md", 8, 8), False),
+    ],
+)
 def test_overlaps_is_symmetric_and_inclusive(a, b, expected):
     assert overlaps(H(*a), S(*b)) is expected
     assert overlaps(S(*b), H(*a)) is expected
@@ -57,7 +61,7 @@ def test_flags_miss_then_hit():
 
 
 def test_repeat_of_a_covered_span_earns_nothing():
-    hits = [H("f.md", 1, 3), H("f.md", 4, 6)]      # both overlap the same gold span
+    hits = [H("f.md", 1, 3), H("f.md", 4, 6)]  # both overlap the same gold span
     assert relevance_flags(hits, [S("f.md", 1, 10)]) == [True, False]
 
 
@@ -155,8 +159,8 @@ def test_ndcg_single_gold_at_rank_three():
 def test_ndcg_two_gold_spans_with_a_miss_between():
     gold = [S("f.md", 1, 5), S("g.md", 1, 5)]
     hits = [H("f.md", 1, 2), H("x.md", 1, 2), H("g.md", 1, 2)]
-    dcg = 1 / math.log2(2) + 1 / math.log2(4)                 # = 1.5
-    ideal = 1 / math.log2(2) + 1 / math.log2(3)               # both gold in ranks 1 and 2
+    dcg = 1 / math.log2(2) + 1 / math.log2(4)  # = 1.5
+    ideal = 1 / math.log2(2) + 1 / math.log2(3)  # both gold in ranks 1 and 2
     assert ndcg_at_k(hits, gold, k=3) == pytest.approx(dcg / ideal)
 
 
@@ -168,7 +172,7 @@ def test_ndcg_repeats_of_a_covered_span_never_push_it_above_one():
 def test_ndcg_ideal_is_capped_by_k():
     gold = [S("a.md", 1, 1), S("b.md", 1, 1), S("c.md", 1, 1)]
     hits = [H("a.md", 1, 1), H("b.md", 1, 1)]
-    assert ndcg_at_k(hits, gold, k=2) == pytest.approx(1.0)   # best possible with only 2 slots
+    assert ndcg_at_k(hits, gold, k=2) == pytest.approx(1.0)  # best possible with only 2 slots
 
 
 def test_ndcg_nothing_found_and_cutoff():
@@ -185,15 +189,18 @@ def test_ndcg_rejects_empty_gold_and_bad_k():
 
 
 # -------------------------------------------------------------- percentile
-@pytest.mark.parametrize("values,p,expected", [
-    ([10, 20, 30, 40], 50, 20),
-    ([10, 20, 30, 40], 95, 40),
-    ([40, 10, 30, 20], 50, 20),                 # input order does not matter
-    (list(range(1, 101)), 95, 95),
-    (list(range(1, 101)), 100, 100),
-    ([7], 50, 7),
-    ([5, 1], 25, 1),
-])
+@pytest.mark.parametrize(
+    "values,p,expected",
+    [
+        ([10, 20, 30, 40], 50, 20),
+        ([10, 20, 30, 40], 95, 40),
+        ([40, 10, 30, 20], 50, 20),  # input order does not matter
+        (list(range(1, 101)), 95, 95),
+        (list(range(1, 101)), 100, 100),
+        ([7], 50, 7),
+        ([5, 1], 25, 1),
+    ],
+)
 def test_percentile_nearest_rank(values, p, expected):
     assert percentile(values, p) == expected
 

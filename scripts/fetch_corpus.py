@@ -4,6 +4,7 @@ Usage:
     python scripts/fetch_corpus.py
     python scripts/fetch_corpus.py --tag 0.143.0 --dest data/raw/fastapi
 """
+
 import argparse
 import sys
 from pathlib import Path

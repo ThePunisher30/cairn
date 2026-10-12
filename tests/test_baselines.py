@@ -1,4 +1,5 @@
 """Phase 1, step 6: candidate windows and the three baseline retrievers."""
+
 import pytest
 
 from cairn.evaluation.baselines import (
@@ -27,7 +28,10 @@ def spans(hits):
 # ------------------------------------------------------------ line_windows
 def test_line_windows_cover_every_line_once_in_sorted_order(corpus):
     assert spans(line_windows(corpus, window=40)) == [
-        ("a.md", 1, 40), ("a.md", 41, 80), ("a.md", 81, 100), ("sub/b.py", 1, 25),
+        ("a.md", 1, 40),
+        ("a.md", 41, 80),
+        ("a.md", 81, 100),
+        ("sub/b.py", 1, 25),
     ]
 
 
@@ -63,7 +67,7 @@ def test_windows_line_endings_are_one_line_each(tmp_path):
 
 
 def test_form_feed_does_not_start_a_new_line(tmp_path):
-    (tmp_path / "a.md").write_text("a\n\x0cb\nc\n", encoding="utf-8")   # editors count 3 lines
+    (tmp_path / "a.md").write_text("a\n\x0cb\nc\n", encoding="utf-8")  # editors count 3 lines
     assert spans(line_windows(tmp_path)) == [("a.md", 1, 3)]
 
 

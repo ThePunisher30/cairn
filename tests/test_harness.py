@@ -1,4 +1,5 @@
 """Phase 1, step 7: running a retriever over the questions and summarising the results."""
+
 import time
 
 import pytest
@@ -29,9 +30,9 @@ class Scripted:
 
 
 ANSWERS = {
-    "first?": [H("b.md", 1, 5), H("a.md", 15, 25)],      # gold found at rank 2
-    "second?": [H("c.py", 5, 8)],                          # only one of two gold spans found
-    "third?": [],                                          # nothing found
+    "first?": [H("b.md", 1, 5), H("a.md", 15, 25)],  # gold found at rank 2
+    "second?": [H("c.py", 5, 8)],  # only one of two gold spans found
+    "third?": [],  # nothing found
 }
 
 
@@ -42,7 +43,7 @@ def test_one_result_per_question_in_order_and_search_gets_text_and_k():
     assert [res.question for res in results] == [Q1, Q2, Q3]
     assert r.calls == [("first?", 10), ("second?", 10), ("third?", 10)]
     assert isinstance(results[0], QuestionResult)
-    assert results[0].hits == (H("b.md", 1, 5), H("a.md", 15, 25))      # a tuple of Hits
+    assert results[0].hits == (H("b.md", 1, 5), H("a.md", 15, 25))  # a tuple of Hits
 
 
 def test_hits_are_cut_to_k_even_if_the_retriever_returns_more():
@@ -69,13 +70,13 @@ def results():
 def test_overall_numbers_worked_out_by_hand(results):
     o = summarize(results)["overall"]
     assert o["n"] == 3
-    assert o["hit@1"] == pytest.approx(1 / 3)          # only q2 has gold at rank 1
+    assert o["hit@1"] == pytest.approx(1 / 3)  # only q2 has gold at rank 1
     assert o["hit@5"] == pytest.approx(2 / 3)
     assert o["hit@10"] == pytest.approx(2 / 3)
     assert o["recall@5"] == pytest.approx((1 + 0.5 + 0) / 3)
     assert o["mrr"] == pytest.approx((0.5 + 1 + 0) / 3)
-    ndcg_q1 = 1 / 1.5849625007211562                    # 1 / log2(3)
-    ndcg_q2 = 1 / (1 + 0.6309297535714574)              # DCG 1, ideal 1 + 1/log2(3)
+    ndcg_q1 = 1 / 1.5849625007211562  # 1 / log2(3)
+    ndcg_q2 = 1 / (1 + 0.6309297535714574)  # DCG 1, ideal 1 + 1/log2(3)
     assert o["ndcg@5"] == pytest.approx((ndcg_q1 + ndcg_q2 + 0) / 3)
 
 

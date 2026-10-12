@@ -4,6 +4,7 @@ They validate whatever questions exist so far, so you can run them while you wri
 batch. Only `test_question_set_is_complete` demands the full 60, so it stays red until you finish.
 Tests are SKIPPED (not passed) if the question file or the downloaded corpus is missing.
 """
+
 from collections import Counter
 
 import pytest
@@ -63,9 +64,7 @@ def test_gold_files_exist_and_line_numbers_are_in_range(questions, corpus):
                 continue
             n = count_lines(f)
             if g.end_line > n:
-                problems.append(
-                    f"{q.id}: {g.path} has {n} lines but the span ends at {g.end_line}"
-                )
+                problems.append(f"{q.id}: {g.path} has {n} lines but the span ends at {g.end_line}")
     assert not problems, "\n".join(problems)
 
 

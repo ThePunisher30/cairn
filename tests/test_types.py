@@ -1,4 +1,5 @@
 """Phase 1, step 2: the shared vocabulary (Span, Hit, Question, Retriever)."""
+
 import dataclasses
 
 import pytest
@@ -54,7 +55,7 @@ def test_question_holds_gold_spans():
 
 
 def test_any_class_with_search_satisfies_retriever():
-    class Fake:                      # no inheritance: structural typing
+    class Fake:  # no inheritance: structural typing
         def search(self, query, k):
             return [Hit("a.md", 1, 2)]
 

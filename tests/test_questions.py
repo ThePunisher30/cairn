@@ -1,4 +1,5 @@
 """Phase 1, step 4: loading and validating the question file."""
+
 import json
 
 import pytest
@@ -26,12 +27,22 @@ def write(tmp_path, rows, name="questions.jsonl"):
 
 
 def test_loads_rows_into_question_objects(tmp_path):
-    path = write(tmp_path, [
-        row(),
-        row(id="q2", category="multi_chunk", split="test", question="Two places?",
-            gold=[{"path": "a.md", "start_line": 1, "end_line": 2},
-                  {"path": "b/c.py", "start_line": 10, "end_line": 12}]),
-    ])
+    path = write(
+        tmp_path,
+        [
+            row(),
+            row(
+                id="q2",
+                category="multi_chunk",
+                split="test",
+                question="Two places?",
+                gold=[
+                    {"path": "a.md", "start_line": 1, "end_line": 2},
+                    {"path": "b/c.py", "start_line": 10, "end_line": 12},
+                ],
+            ),
+        ],
+    )
     qs = load_questions(path)
     assert [q.id for q in qs] == ["q1", "q2"]
     assert isinstance(qs[0], Question)
@@ -85,10 +96,13 @@ def test_empty_gold_is_rejected(tmp_path):
         load_questions(write(tmp_path, [row(gold=[])]))
 
 
-@pytest.mark.parametrize("bad", [
-    {"path": "a.md", "start_line": 0, "end_line": 5},
-    {"path": "a.md", "start_line": 9, "end_line": 5},
-])
+@pytest.mark.parametrize(
+    "bad",
+    [
+        {"path": "a.md", "start_line": 0, "end_line": 5},
+        {"path": "a.md", "start_line": 9, "end_line": 5},
+    ],
+)
 def test_impossible_line_numbers_are_rejected_with_the_question_id(tmp_path, bad):
     with pytest.raises(QuestionError, match="q9"):
         load_questions(write(tmp_path, [row(id="q9", gold=[bad])]))

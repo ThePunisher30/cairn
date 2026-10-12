@@ -1,4 +1,5 @@
 """Phase 1, step 1: your Lesson 2 JSONL helpers, promoted into the package."""
+
 import pytest
 
 from cairn.jsonl import JsonlError, read_jsonl, write_jsonl
@@ -25,7 +26,7 @@ def test_read_is_lazy(tmp_path):
     path = tmp_path / "x.jsonl"
     write_jsonl(path, [{"a": 1}, {"a": 2}])
     it = read_jsonl(path)
-    assert iter(it) is it            # a generator is its own iterator
+    assert iter(it) is it  # a generator is its own iterator
     assert next(it) == {"a": 1}
 
 

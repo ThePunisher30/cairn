@@ -1,7 +1,7 @@
 import random
 from pathlib import Path
 
-from cairn.types import Hit, Question
+from cairn.types import Hit
 
 
 def line_windows(root, window=40, suffixes=(".md", ".py")) -> list[Hit]:

@@ -5,6 +5,7 @@ Usage:
     python scripts/show_span.py fastapi/routing.py 100 140
 The path is relative to the corpus folder (data/raw/fastapi).
 """
+
 import argparse
 import sys
 from pathlib import Path
