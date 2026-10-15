@@ -38,3 +38,42 @@ class Question:
     split: str
     text: str
     gold: tuple[Span, ...]
+
+
+@dataclass(frozen=True)
+class Document:
+    path: str  # relative to the corpus root, forward slashes
+    text: str  # the whole file
+    kind: str  # "prose" (markdown) or "code" (python)
+
+    @property
+    def lines(self) -> list[str]:
+        if not self.text:
+            return []
+        parts = self.text.split("\n")
+        if parts[-1] == "":
+            parts.pop()
+        return parts
+
+
+@dataclass(frozen=True)
+class Chunk:
+    id: str
+    text: str
+    path: str
+    start_line: int
+    end_line: int
+    kind: str
+    content_hash: str
+    token_count: int
+    heading_path: tuple[str, ...] = ()
+
+    @property
+    def index_text(self) -> str:
+        if self.heading_path:
+            return " > ".join(self.heading_path) + "\n" + self.text
+        return self.text
+
+
+class Chunker(Protocol):
+    def split(self, doc: Document) -> list[Chunk]: ...
