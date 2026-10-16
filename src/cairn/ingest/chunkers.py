@@ -1,5 +1,6 @@
 """The chunkers, and make_chunk, the one way a Chunk gets built."""
 
+import ast
 import hashlib
 import re
 
@@ -216,4 +217,94 @@ class MarkdownChunker:
             else:
                 spans = [trimmed]
             chunks.extend(_chunks_from_spans(doc, spans, heading_path))
+        return chunks
+
+
+_DEFS = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+
+
+def _first_line(node):
+    """First line of a statement, counting its decorators."""
+    return min([node.lineno] + [d.lineno for d in getattr(node, "decorator_list", [])])
+
+
+def _next_nonblank(lines, i):
+    while i <= len(lines) and _is_blank(lines[i - 1]):
+        i += 1
+    return i
+
+
+def _python_units(lines, statements, prefix, previous_end, units):
+    """Append (start, end, heading path) for each unit among `statements`.
+
+    Returns the end line of the last unit, so the caller knows where to continue.
+    """
+    # 1. group the statements: every def/class alone, runs of other statements together
+    groups = []
+    for statement in statements:
+        if isinstance(statement, _DEFS):
+            groups.append([statement])
+        elif groups and not isinstance(groups[-1][0], _DEFS):
+            groups[-1].append(statement)
+        else:
+            groups.append([statement])
+
+    # 2. turn each group into a unit
+    for group in groups:
+        node = group[0]
+        start = _next_nonblank(lines, previous_end + 1)  # comments/decorators above belong to it
+        if isinstance(node, ast.ClassDef):
+            body = node.body
+            leading = 0  # how many statements before the first def: docstring, attributes...
+            while leading < len(body) and not isinstance(body[leading], _DEFS):
+                leading += 1
+            if leading > 0:
+                header_end = body[leading - 1].end_lineno
+            else:  # the body starts with a method: the header is the lines before it
+                header_end = _first_line(body[0]) - 1
+                while header_end > start and _is_blank(lines[header_end - 1]):
+                    header_end -= 1
+            path = prefix + (node.name,)
+            units.append((start, header_end, path))
+            # the methods (and nested classes) are handled the same way, one level deeper
+            previous_end = _python_units(lines, body[leading:], path, header_end, units)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            units.append((start, node.end_lineno, prefix + (node.name,)))
+            previous_end = node.end_lineno
+        else:  # a run of imports, constants, docstring...
+            end = group[-1].end_lineno
+            units.append((start, end, prefix))
+            previous_end = end
+    return previous_end
+
+
+class PythonChunker:
+    def __init__(self, fallback_max_tokens=200):
+        if fallback_max_tokens < 1:
+            raise ValueError("fallback_max_tokens must be at least 1")
+        self.fallback = FixedChunker(fallback_max_tokens)
+
+    def split(self, doc: Document) -> list[Chunk]:
+        lines = doc.lines
+        if all(_is_blank(line) for line in lines):  # also true for an empty file
+            return []
+        try:
+            tree = ast.parse(doc.text)
+        except SyntaxError:
+            return self.fallback.split(doc)
+
+        units = []
+        _python_units(lines, tree.body, (), 0, units)
+        if not units:  # a file with only comments
+            return self.fallback.split(doc)
+
+        # a comment after the last statement belongs to the last chunk
+        last_nonblank = max(n for n, line in enumerate(lines, start=1) if not _is_blank(line))
+        if units[-1][1] < last_nonblank:
+            start, _, path = units[-1]
+            units[-1] = (start, last_nonblank, path)
+
+        chunks = []
+        for start, end, path in units:
+            chunks.extend(_chunks_from_spans(doc, [(start, end)], path))
         return chunks
