@@ -1,6 +1,7 @@
 """The chunkers, and make_chunk, the one way a Chunk gets built."""
 
 import hashlib
+import re
 
 from cairn.tokens import count_tokens
 from cairn.types import Chunk, Document
@@ -138,14 +139,6 @@ def _apply_overlap(lines, spans, overlap_lines):
     return result
 
 
-def _chunks_from_spans(doc, spans, heading_path=()):
-    lines = doc.lines
-    return [
-        make_chunk(doc.path, s, e, "\n".join(lines[s - 1 : e]), doc.kind, heading_path)
-        for s, e in spans
-    ]
-
-
 class RecursiveChunker:
     def __init__(self, max_tokens=200, overlap_lines=0):
         if max_tokens < 1:
@@ -163,3 +156,64 @@ class RecursiveChunker:
         if self.overlap_lines > 0:
             spans = _apply_overlap(lines, spans, self.overlap_lines)
         return _chunks_from_spans(doc, spans)
+
+
+_HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
+_ANCHOR = re.compile(r"\s*\{\s*#[^}]*\}\s*$")
+
+
+def _headings(lines):
+    """(line number, level, title) for every real heading, skipping fenced code blocks."""
+    found = []
+    in_fence = False
+    for number, line in enumerate(lines, start=1):
+        if line.lstrip().startswith(("```", "~~~")):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        match = _HEADING.match(line)
+        if match:
+            title = _ANCHOR.sub("", match.group(2)).strip()
+            found.append((number, len(match.group(1)), title))
+    return found
+
+
+def _sections(lines):
+    """(first line, last line, heading path) for every section of a
+    markdown document."""
+    headings = _headings(lines)
+    sections = []
+    first_heading = headings[0][0] if headings else len(lines) + 1
+    if first_heading > 1:
+        sections.append((1, first_heading - 1, ()))
+    stack = []  # (level, title) of the headings above the current one
+    for index, (number, level, title) in enumerate(headings):
+        while stack and stack[-1][0] >= level:
+            stack.pop()
+        stack.append((level, title))
+        is_last = index + 1 == len(headings)
+        end = len(lines) if is_last else headings[index + 1][0] - 1
+        sections.append((number, end, tuple(t for _, t in stack)))
+    return sections
+
+
+class MarkdownChunker:
+    def __init__(self, max_tokens=300):
+        if max_tokens < 1:
+            raise ValueError("max_tokens must be at least 1")
+        self.max_tokens = max_tokens
+
+    def split(self, doc: Document) -> list[Chunk]:
+        lines = doc.lines
+        chunks = []
+        for start, end, heading_path in _sections(lines):
+            trimmed = _trim(lines, start, end)
+            if trimmed is None:
+                continue
+            if _tokens(lines, *trimmed) > self.max_tokens:
+                spans = _pack_paragraphs(lines, *trimmed, self.max_tokens)  # too big: split it
+            else:
+                spans = [trimmed]
+            chunks.extend(_chunks_from_spans(doc, spans, heading_path))
+        return chunks
