@@ -90,3 +90,52 @@ Command: `python scripts/ingest.py`. 671 documents, 3,267 chunks (1,392 prose, 1
 Open problems for later: 76 code chunks over 512 tokens, and whole-class or whole-file answers that the AST chunker splits (code intact 0.70).
 
 Commands: `python scripts/ingest.py`; `python scripts/compare_chunkers.py`; `python scripts/compare_chunkers.py --show-broken structure-300`.
+
+
+## Phase 3: BM25 baseline
+
+40 dev questions, k = 10. Date: 2026-10-21. Commit: ca9c4f4.
+
+Setup: `structure-300` chunks (the Phase 2 choice, 3,267 chunks), the code-aware tokenizer (identifiers kept whole and also split into their parts, no stopwords), `k1 = 1.2`, `b = 0.75`. The index has 7,184 distinct terms, a mean chunk length of 86.9 tokens, and is a 1.1 MB pickle file (`chunks.jsonl` is 2.7 MB).
+
+| Retriever | hit@1 | hit@5 | hit@10 | recall@1 | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|---|---|---|---|
+| oracle (Phase 1) | 1.000 | 1.000 | 1.000 | 0.875 | 1.000 | 1.000 | 1.000 |
+| random / first-N (Phase 1) | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 |
+| **BM25** | 0.600 | 0.750 | 0.800 | 0.525 | 0.750 | 0.660 | 0.658 |
+
+By question category:
+
+| Category | n | hit@1 | hit@10 | recall@10 | MRR | nDCG@10 |
+|---|---|---|---|---|---|---|
+| lexical | 10 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| semantic | 10 | 0.300 | 0.800 | 0.800 | 0.432 | 0.518 |
+| multi_chunk | 10 | 0.600 | 0.800 | 0.600 | 0.658 | 0.551 |
+| code | 10 | 0.500 | 0.600 | 0.600 | 0.550 | 0.563 |
+
+Search time over 800 searches (the 40 dev questions, 20 times each): p50 2.62 ms, p95 4.13 ms, max 8.39 ms. The target was p95 under 20 ms.
+
+Commands: `python scripts/ingest.py`, `python scripts/build_index.py`, `python scripts/run_eval.py --retriever bm25`, `python scripts/bench_search.py`. The test split was not used.
+
+### What this shows
+
+1. **BM25 is perfect on exact-word questions and weakest on meaning.** All 10 lexical questions have the answer at rank 1 (MRR 1.000). The semantic questions need rank 10 to get 0.800 but only 0.300 at rank 1. A keyword engine finds the answer when the question uses the passage's own words, and struggles when the question paraphrases it.
+2. **It is far above the floor and well below the ceiling.** Random and first-N score 0.000, the oracle 1.000. BM25 gets MRR 0.660, so it already works, and 8 of 40 questions are still missed at k = 10.
+3. **It is fast.** p95 of 4.1 ms is about five times under the 20 ms target, from a plain dictionary of lists and a heap, with no model and no special hardware.
+
+### The 8 misses (no gold passage in the top 10)
+
+For each, where the first chunk that overlaps the gold span ranked, out of all chunks that share at least one word with the question.
+
+| Question | Category | Gold rank | Why BM25 missed it |
+|---|---|---|---|
+| q017 spellings accepted as "true" | semantic | 212 | **Vocabulary mismatch.** The passage contains `true` but none of the content words of the question (`spellings`, `accepted`, `boolean`, `option`, `url`). |
+| q026 turn off the interactive docs in production | semantic | 1217 | **Vocabulary mismatch.** The gold chunk shares only `can` and `the` with the question: it talks about disabling the OpenAPI URLs, the question says "turn off the interactive documentation pages". |
+| q031 status codes with no body | code | 188 | **Docs outrank code, and there is no stemming.** The tutorial page about status codes is dense in the question's words and scores 36; the function `is_body_allowed_for_status_code` has `code` but the question says `codes`. |
+| q041 yield dependency into an async context manager | code | 136 | **Docs outrank code.** "How does the code ..." is a question about the implementation, but the docs pages on `yield` contain the same words more often. BM25 cannot tell that the user wants source code. |
+| q043 what the HTTPException handler returns in the example | code | 16 | **The answer is split across chunks.** The gold span is a whole example file, which `structure-300` cuts into 4 chunks (41, 46, 86 and 73 tokens); the docs page about error handling matches the words better than any one small chunk. This is the Phase 2 finding again. |
+| q044 one dependency uses another: what is returned with no query | code | 972 | **Vocabulary mismatch plus a split file.** The 4 chunks of the file share only `query` with the question (the code says `query_extractor`, `read_query`). |
+| q058 why filter data through the response model; what if validation fails | multi_chunk | 20 | **Many chunks compete.** The question is long and generic, and several chunks of the response-model page share its words. The two specific gold chunks rank 20th and lower, and each lacks some of the question's content words (`serialization`, `fails`, `happens`). |
+| q059 declare routes in a separate module and attach them to the main app | multi_chunk | 47 | **Vocabulary mismatch.** The passages talk about `APIRouter` and `include_router`; the question says `attach`, `separate` and `module`. |
+
+Five kinds of failure: vocabulary mismatch (q017, q026, q044, q059), docs ranked above the code the user asked about (q031, q041), no stemming (`codes` against `code`, q031), answers cut across chunks (q043, q044), and a long generic question with many competing chunks (q058). Embeddings (Phase 4) should help with the first, hybrid retrieval and reranking (Phases 7-8) with the second, a stemmer is a cheap tokenizer experiment, and parent-child retrieval is the idea for the fourth.
