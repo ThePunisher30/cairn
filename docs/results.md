@@ -138,4 +138,52 @@ For each, where the first chunk that overlaps the gold span ranked, out of all c
 | q058 why filter data through the response model; what if validation fails | multi_chunk | 20 | **Many chunks compete.** The question is long and generic, and several chunks of the response-model page share its words. The two specific gold chunks rank 20th and lower, and each lacks some of the question's content words (`serialization`, `fails`, `happens`). |
 | q059 declare routes in a separate module and attach them to the main app | multi_chunk | 47 | **Vocabulary mismatch.** The passages talk about `APIRouter` and `include_router`; the question says `attach`, `separate` and `module`. |
 
-Five kinds of failure: vocabulary mismatch (q017, q026, q044, q059), docs ranked above the code the user asked about (q031, q041), no stemming (`codes` against `code`, q031), answers cut across chunks (q043, q044), and a long generic question with many competing chunks (q058). Embeddings (Phase 4) should help with the first, hybrid retrieval and reranking (Phases 7-8) with the second, a stemmer is a cheap tokenizer experiment, and parent-child retrieval is the idea for the fourth.
+Five kinds of failure: vocabulary mismatch (q017, q026, q044, q059), docs ranked above the code the user asked about (q031, q041), no stemming (`codes` against `code`, q031), answers cut across chunks (q043, q044), and a long generic question with many competing chunks (q058). Embeddings (Phase 4) should help with the first, hybrid retrieval and reranking (Phase 6) with the second, a stemmer is a cheap tokenizer experiment, and parent-child retrieval is the idea for the fourth.
+
+
+### Experiments: tokenizer variants x chunkers
+
+Dev questions only, k = 10, `k1 = 1.2`, `b = 0.75`. Date: 2026-10-22. Command: `python scripts/ablate_bm25.py --by-category`. `plain` = identifiers kept whole only; `split` = whole and parts; `+stop` = the English stopword list removed.
+
+| Chunker | Tokenizer | Terms | hit@1 | hit@10 | MRR | nDCG@10 | MRR lexical | MRR semantic | MRR multi_chunk | MRR code |
+|---|---|---|---|---|---|---|---|---|---|---|
+| fixed-200 | plain | 6606 | 0.375 | 0.675 | 0.459 | 0.464 | 0.683 | 0.355 | 0.472 | 0.325 |
+| fixed-200 | split | 7184 | 0.425 | 0.725 | 0.514 | 0.512 | 0.750 | 0.355 | 0.625 | 0.325 |
+| fixed-200 | plain+stop | 6573 | 0.400 | 0.700 | 0.478 | 0.505 | 0.650 | 0.454 | 0.464 | 0.344 |
+| fixed-200 | split+stop | 7151 | 0.450 | 0.700 | 0.523 | 0.523 | 0.614 | 0.433 | 0.668 | 0.377 |
+| fixed-400 | plain | 6606 | 0.400 | 0.800 | 0.502 | 0.529 | 0.633 | 0.437 | 0.674 | 0.267 |
+| fixed-400 | split | 7184 | 0.525 | 0.850 | 0.597 | 0.611 | 0.850 | 0.415 | 0.702 | 0.421 |
+| fixed-400 | plain+stop | 6573 | 0.450 | 0.725 | 0.524 | 0.544 | 0.675 | 0.428 | 0.661 | 0.333 |
+| fixed-400 | split+stop | 7151 | 0.500 | 0.775 | 0.564 | 0.581 | 0.760 | 0.407 | 0.662 | 0.429 |
+| recursive-400 | plain | 6606 | 0.375 | 0.725 | 0.467 | 0.492 | 0.639 | 0.382 | 0.632 | 0.217 |
+| recursive-400 | split | 7184 | 0.475 | 0.750 | 0.562 | 0.567 | 0.850 | 0.370 | 0.700 | 0.327 |
+| recursive-400 | plain+stop | 6573 | 0.425 | 0.725 | 0.495 | 0.506 | 0.675 | 0.418 | 0.648 | 0.239 |
+| recursive-400 | split+stop | 7151 | 0.475 | 0.750 | 0.544 | 0.559 | 0.750 | 0.398 | 0.681 | 0.347 |
+| structure-300 | plain | 6606 | 0.450 | 0.750 | 0.552 | 0.564 | 0.820 | 0.439 | 0.614 | 0.334 |
+| **structure-300** | **split** | 7184 | **0.600** | 0.800 | **0.660** | 0.658 | **1.000** | 0.432 | 0.658 | 0.550 |
+| structure-300 | plain+stop | 6573 | 0.450 | 0.725 | 0.549 | 0.561 | 0.750 | 0.433 | 0.667 | 0.348 |
+| structure-300 | split+stop | 7151 | 0.575 | 0.825 | 0.654 | 0.663 | 0.833 | 0.448 | 0.725 | 0.611 |
+
+With 40 questions, moving one question from rank 1 to not found changes hit@1 by 0.025, so a difference of one or two questions is not evidence.
+
+### Experiments: k1 x b
+
+Command: `python scripts/ablate_bm25.py --tune structure-300 --tokenizer split`. MRR on the dev questions.
+
+| | b=0 | b=0.25 | b=0.5 | b=0.75 | b=1 |
+|---|---|---|---|---|---|
+| k1=0 | 0.314 | 0.314 | 0.314 | 0.314 | 0.314 |
+| k1=0.6 | 0.331 | 0.577 | 0.628 | 0.633 | 0.638 |
+| k1=0.9 | 0.329 | 0.604 | 0.644 | 0.654 | 0.637 |
+| k1=1.2 | 0.320 | 0.603 | 0.649 | **0.660** | 0.619 |
+| k1=1.5 | 0.280 | 0.592 | 0.642 | 0.651 | 0.558 |
+| k1=2 | 0.280 | 0.590 | 0.633 | 0.633 | 0.518 |
+| k1=3 | 0.242 | 0.586 | 0.611 | 0.584 | 0.465 |
+
+### What the experiments show
+
+1. **Splitting identifiers helps, and the direction is the same for all four chunkers.** MRR goes from 0.459 to 0.514 (fixed-200), 0.502 to 0.597 (fixed-400), 0.467 to 0.562 (recursive-400) and 0.552 to 0.660 (structure-300). For structure-300, hit@1 rises from 0.450 to 0.600, which is 6 questions. Per category (structure-300), lexical goes from 0.820 to 1.000 and code from 0.334 to 0.550, while semantic is flat (0.439 to 0.432). Comparing the two rankings question by question: splitting is better on 15 questions, worse on 7 and the same on 18 (counted with a throwaway script, not committed). Most of the 7 are small moves (for example rank 2 to 3, or 4 to 7). It helps because the passages and code contain identifiers and the questions use plain words: for q032, "How is the default unique operation ID of a route assembled?", the gold chunk contains the identifiers `generate_unique_id` and `operation_id`. With the plain tokenizer only `route` matches (gold at rank 226); with splitting `id`, `operation`, `route` and `unique` all match (rank 2). It does not help semantic questions, which fail for a different reason: the passage uses other words.
+2. **Stopwords are noise here.** For structure-300 + split they change MRR from 0.660 to 0.654 and hit@10 from 0.800 to 0.825 (one question); lexical drops from 1.000 to 0.833 while code rises from 0.550 to 0.611. For the other chunkers the effect has no consistent sign: +0.019 and +0.022 and +0.028 without splitting, but 0.597 to 0.564 (fixed-400) and 0.562 to 0.544 (recursive-400) with it. Differences of 0.01 to 0.04 are one or two questions. BM25's idf already gives common words almost no weight, so removing them changes little. No stopwords is the simpler choice and is not worse.
+3. **The chunker matters, and the ranking agrees with Phase 2 on the low end.** With splitting, structure-300 has the best MRR (0.660), then fixed-400 (0.597), recursive-400 (0.562) and fixed-200 (0.514), the same worst chunker as in the Phase 2 integrity table (0.46). The orders do not match exactly: fixed-400 has the best hit@10 (0.850 against 0.800) although only 0.78 of its answers are intact. Bigger chunks contain more of the question's words, so they are found within 10 results more often but rank lower, and hit@10 gives credit for any overlap with the answer, even when the answer is cut across chunks.
+4. **The defaults are about the best.** The best cell of the grid is `k1 = 1.2, b = 0.75` (0.660). Nearby cells are within 0.02 (`k1 = 0.9`: 0.654, `k1 = 1.5`: 0.651), which is noise on 40 questions, so the defaults stay. Two cells are very informative: `b = 0` gives about 0.32 for every `k1`, half the score, because without length normalisation the chunks that are very long (the 76 code chunks over 512 tokens, up to 7,124) collect matches from many words and outrank the focused chunks. `k1 = 0`, where only the presence of a word counts and not how often it occurs, gives 0.314 for every `b`: term frequency is worth about 0.35 of MRR. `b = 1` hurts at large `k1` (0.465 at `k1 = 3`) because it penalises long chunks too much, and some correct chunks are long.
+5. **Keyword baseline for Phases 4-6: `structure-300` chunks, the `split` tokenizer, no stopwords, `k1 = 1.2`, `b = 0.75`.** MRR 0.660, hit@10 0.800, p95 search time 4 ms.
