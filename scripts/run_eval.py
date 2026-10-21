@@ -20,6 +20,10 @@ from cairn.evaluation.baselines import (
 )
 from cairn.evaluation.harness import format_report, run_retriever, summarize
 from cairn.evaluation.questions import QuestionError, load_questions
+from cairn.ingest.pipeline import read_chunks
+from cairn.jsonl import JsonlError
+from cairn.retrieval.bm25 import BM25Retriever
+from cairn.retrieval.index import InvertedIndex
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -29,13 +33,19 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Score a retriever on the question set.")
     parser.add_argument("--questions", type=Path, default=default_questions)
     parser.add_argument("--corpus", type=Path, default=settings.data_dir / "raw" / "fastapi")
-    parser.add_argument("--retriever", choices=["random", "first", "oracle"], default="random")
+    parser.add_argument(
+        "--retriever", choices=["random", "first", "oracle", "bm25"], default="random"
+    )
     parser.add_argument("--split", choices=["dev", "test"], default="dev")
     parser.add_argument("--k", type=int, default=10)
     parser.add_argument("--window", type=int, default=40)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--use-test-set", action="store_true")
     parser.add_argument("--test-log", type=Path, default=default_test_log)
+    parser.add_argument("--index", type=Path, default=settings.data_dir / "bm25.pkl")
+    parser.add_argument("--chunks", type=Path, default=settings.data_dir / "chunks.jsonl")
+    parser.add_argument("--k1", type=float, default=1.2)
+    parser.add_argument("--b", type=float, default=0.75)
     args = parser.parse_args(argv)
 
     # TODO 1: refuse the test split unless --use-test-set was given
@@ -52,6 +62,20 @@ def main(argv: list[str] | None = None) -> int:
     # TODO 3: build the retriever that args.retriever names
     if args.retriever == "oracle":
         retriever = OracleRetriever(questions)
+    elif args.retriever == "bm25":
+        if not args.index.is_file():
+            print(f"error: {args.index} not found (run scripts/build_index.py)", file=sys.stderr)
+            return 1
+        if not args.chunks.is_file():
+            print(f"error: {args.chunks} not found (run scripts/ingest.py)", file=sys.stderr)
+            return 1
+        try:
+            retriever = BM25Retriever(
+                InvertedIndex.load(args.index), read_chunks(args.chunks), k1=args.k1, b=args.b
+            )
+        except (ValueError, JsonlError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
     else:
         candidates = line_windows(args.corpus, window=args.window)
         if args.retriever == "random":
