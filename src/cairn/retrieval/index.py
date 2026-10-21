@@ -1,6 +1,10 @@
+import pickle
 from collections import Counter
+from pathlib import Path
 
 from cairn.retrieval.tokenizer import Tokenizer
+
+FORMAT_VERSION = 1
 
 
 class InvertedIndex:
@@ -38,3 +42,29 @@ class InvertedIndex:
 
     def postings_for(self, term):
         return self.postings.get(term, ())
+
+    def save(self, path):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "version": FORMAT_VERSION,
+            "postings": self.postings,
+            "doc_lengths": self.doc_lengths,
+            "doc_ids": self.doc_ids,
+            "tokenizer": {
+                "split_identifiers": self.tokenizer.split_identifiers,
+                "stopwords": sorted(self.tokenizer.stopwords),
+            },
+        }
+        with open(path, "wb") as f:
+            pickle.dump(payload, f)
+
+    @classmethod
+    def load(cls, path):
+        with open(path, "rb") as f:
+            payload = pickle.load(f)
+        if not isinstance(payload, dict) or payload.get("version") != FORMAT_VERSION:
+            raise ValueError(f"{Path(path).name} is not a version-{FORMAT_VERSION} index file")
+        settings = payload["tokenizer"]
+        tokenizer = Tokenizer(settings["split_identifiers"], frozenset(settings["stopwords"]))
+        return cls(payload["postings"], payload["doc_lengths"], payload["doc_ids"], tokenizer)
