@@ -12,6 +12,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+dense = [
+    "sentence-transformers>=3",
+]
 dev = [
     "pytest>=8",
     "ruff>=0.6",
