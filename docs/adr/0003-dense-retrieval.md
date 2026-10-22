@@ -37,9 +37,9 @@ cache, the index and the retriever myself; only the model's weights come from a 
   dense does not replace BM25.
 - Most dense failures are a neighbouring chunk of the right page (7 of 16), or a chunk about the same
   topic from another page. Two failures (q005, q007) may have a debatable label.
-- A search is about 40 times slower than BM25 (112 ms against 2.6 ms), mostly the time to embed the question
-  on the CPU. The brute-force scan itself is small at this size; ANN indexes (Phase 5) cut the scan, not the
-  embedding.
+- A search is about 40 times slower than BM25 (112 ms against 2.6 ms), almost all of it the model embedding the
+  question on the CPU (38.5 ms alone; the eval's 112 ms is higher and unexplained). The brute-force scan takes
+  0.9 ms; ANN indexes (Phase 5) cut the scan, not the embedding.
 - 83 chunks are longer than the model's 512-token limit and are truncated; the model never sees their tail. I
   have not checked whether that caused any dev failure.
 - The query prefix is part of the model setup: dropping it costs 0.106 MRR on `structure-300`. The cache is not
