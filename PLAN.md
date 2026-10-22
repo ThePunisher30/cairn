@@ -6,6 +6,32 @@ A from-scratch RAG engine over a real codebase and its docs. Retrieval, indexing
 
 ---
 
+## Status (updated after Phase 4)
+
+**Phases 0-4 are done and merged** (PRs #1-#6). 602 tests pass. Phases 5-11 are still planned. The numbers are in `docs/results.md`.
+
+| Phase | Result |
+|---|---|
+| 0 | Package, config, pinned FastAPI 0.143.0 fetch |
+| 1 | 60 questions (40 dev, 20 test), metrics, harness, baselines: oracle 1.0, random and first-N 0.0 |
+| 2 | Four chunkers; `structure-300` chosen (0.88 of gold spans intact, 3,267 chunks); ADR 0001 |
+| 3 | BM25 from scratch: MRR 0.660, hit@10 0.800, p95 4.1 ms; ADR 0002 |
+| 4 | Dense retrieval (`bge-small`, flat index): MRR 0.711, hit@10 0.925, p50 112 ms; ADR 0003; 16 classified failures |
+
+### What changed from the plan below, and what the data says about the next phases
+
+- **Questions:** the 60 questions were drafted by Claude from candidate passages the author chose, with span checks and a word-overlap report. The README states this.
+- **Corpus:** the chunked corpus is `docs/en/docs/**/*.md` (minus the release notes), `fastapi/**/*.py` and `docs_src/**/*.py`. `docs_src` was added because some questions are answered by example files, and translations (`docs/de`, ...) were excluded.
+- **Code layout:** the packages are `ingest/`, `retrieval/` (tokenizer, index, BM25), `dense/` (embedder, cache, flat index, retriever, model registry) and `evaluation/`. The dense code is in `dense/`, not `retrieval/`. `eval/` holds data only.
+- **Persistence:** BM25 is a pickle of a plain dict (a compact on-disk format was not built). Vectors and the embedding cache are `.npz` files loaded without pickle, not `.npy`.
+- **Embedding cache key:** it is `sha256(model name + document prefix + text the model saw)`, not `(content_hash, model_name)`: `content_hash` covers only a chunk's text, not its heading, the model or the prefix (ADR 0003).
+- **Second embedding model:** `all-MiniLM-L6-v2`, which is clearly worse (MRR 0.492).
+- **Phase 5 note:** the flat index is only 5.0 MB for this corpus and scans in 0.9 ms, while embedding the question takes 38.5 ms alone (measured separately; the eval's p50 of 112 ms is higher and unexplained), so ANN cannot fix the per-query latency at this size. Measure the scan time and the embedding time separately in `bench/ann.py`. The plan below still stands: use the flat index as the exact answer, and a larger scale set so ANN has something to prove.
+- **Phase 6 note:** the case for fusion is measured: at rank 1 each retriever alone gets 0.600, and at least one of them gets 0.775. Nine dev questions fail in both, so fusion cannot fix them. Before the first test-split run, check the two debatable labels (q005, q007) in `eval/failures/phase4.md`.
+- **Open questions from Phase 4**, not investigated: why the query prefix matters only for `structure-300`; whether the 83 chunks over the model's 512-token limit cost anything on the dev questions; why a first embedding run was slower than the benchmark predicted.
+
+---
+
 ## 1. Ground rules
 
 ### Who writes what
@@ -41,11 +67,11 @@ Tests green, numbers logged in `docs/results.md`, checkpoint notes written, code
 |---|---|---|
 | **Corpus** | The **FastAPI repo**, pinned to one git tag: `docs/en/docs/**/*.md` plus `fastapi/**/*.py` | Mixed prose and code, so you get Markdown chunking *and* AST chunking. It's about 10–20k chunks, laptop-sized. You know Python, so you can write good eval questions. Alternatives with the same shape: `httpx`, `rich`, `pydantic` |
 | **LLM contamination caveat** | Models have seen FastAPI in training | Pure generation scores will look inflated. Mitigated by: (a) retrieval metrics don't involve the LLM, (b) eval questions target version-pinned specifics, (c) unanswerable questions test whether the model abstains instead of answering from memory |
-| **Embeddings** | `BAAI/bge-small-en-v1.5` (384-d), with a second model for comparison in Phase 4 | Fast on CPU, and you already ran it |
+| **Embeddings** | `BAAI/bge-small-en-v1.5` (384-d), with `all-MiniLM-L6-v2` for comparison in Phase 4 (done) | Fast on CPU, and you already ran it |
 | **Reranker** | A small cross-encoder from `sentence-transformers` | Runs on CPU, and writing a cross-encoder is out of scope |
 | **LLM** | Anthropic API behind your own `LLMClient` interface. Ollama implementation as a free local option | Quality for answers, and a swappable boundary to design well |
 | **Judge model** | The cheapest model available | Eval runs many calls, and the budget stays small |
-| **Storage** | Flat files (`.npy` vectors, `.jsonl` chunks, a binary or JSON postings file) plus SQLite for the manifest | Nothing hidden. You see exactly what's on disk |
+| **Storage** | Flat files (`.npz` vectors and cache, `.jsonl` chunks, a pickled postings dict) plus SQLite for the manifest (Phase 9) | Nothing hidden. You see exactly what's on disk |
 | **Language/runtime** | Python 3.12, venv at a **short path** (Windows long-path issue you already hit) | |
 
 ---
@@ -82,12 +108,15 @@ Tests green, numbers logged in `docs/results.md`, checkpoint notes written, code
 ```
 cairn/
 ├── PLAN.md
+├── README.md
 ├── pyproject.toml
-├── src/cairn/
+├── src/cairn/                # (built so far: config, corpus, jsonl, timing, tokens, types, ingest,
+│   │                         #  retrieval/{tokenizer,index,bm25}, dense/*, evaluation/*)
 │   ├── config.py
 │   ├── types.py              # Chunk, Hit, Document, Retriever protocol
-│   ├── ingest/               # loaders.py, chunkers/{fixed,recursive,markdown,python_ast}.py, pipeline.py
-│   ├── retrieval/            # tokenizer.py, bm25.py, embedder.py, flat.py, kmeans.py, ivf.py, hnsw.py,
+│   ├── ingest/               # documents.py, chunkers.py (all four chunkers), pipeline.py
+│   ├── dense/                # models.py, embedder.py, cache.py, flat_index.py, retriever.py
+│   ├── retrieval/            # tokenizer.py, index.py, bm25.py (done); later kmeans.py, ivf.py, hnsw.py,
 │   │                         # fusion.py, rerank.py, hybrid.py, context.py
 │   ├── llm/                  # base.py, anthropic_client.py, ollama_client.py, retry.py, tokens.py
 │   ├── generation/           # prompts/, packer.py, citations.py, answer.py
@@ -194,8 +223,10 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 
 ---
 
-### Phase 4: Dense retrieval (4–5 days)
+### Phase 4: Dense retrieval (4–5 days) — DONE
 **Goal:** semantic search over your own embeddings, with disk caching.
+
+*Done: see Status above and `docs/results.md`. The cache is keyed by the text the model saw, the model and the document prefix (not `content_hash`), and files are `.npz`.*
 
 **You write**
 - `Embedder` wrapper: batching, L2 normalization, **query-vs-document prefix handling**, truncation awareness.
@@ -214,7 +245,7 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 
 ---
 
-### Phase 5: ANN indexes from scratch (7–10 days, the hardest phase)
+### Phase 5: ANN indexes from scratch (7–10 days, the hardest phase) — NEXT
 **Goal:** understand why vector databases exist by building the index inside them.
 
 **You write**
@@ -371,20 +402,20 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 
 ## 7. Timeline
 
-| Phase | Topic | Days | Cumulative weeks (at 8–10 h/week) |
-|---|---|---|---|
-| 0 | Foundations | 2–3 | 0.5 |
-| 1 | Yardstick (corpus, eval, metrics) | 4–5 | 1.5 |
-| 2 | Ingestion and chunking | 5–7 | 3 |
-| 3 | BM25 | 5–6 | 4 |
-| 4 | Dense retrieval | 4–5 | 5 |
-| 5 | ANN (IVF, HNSW) | 7–10 | 7 |
-| 6 | Hybrid and rerank | 5–6 | 8 |
-| 7 | Generation | 6–8 | 9.5 |
-| 8 | Agent loop | 5–7 | 11 |
-| 9 | Serving and production | 7–9 | 13 |
-| 10 | Frontend, CI, deploy | 5–7 | 14.5 |
-| 11 | Framework benchmark and write-up | 4–5 | 15.5 |
+| Phase | Topic | Days | Cumulative weeks (at 8–10 h/week) | Status |
+|---|---|---|---|---|
+| 0 | Foundations | 2–3 | 0.5 | done |
+| 1 | Yardstick (corpus, eval, metrics) | 4–5 | 1.5 | done |
+| 2 | Ingestion and chunking | 5–7 | 3 | done |
+| 3 | BM25 | 5–6 | 4 | done |
+| 4 | Dense retrieval | 4–5 | 5 | done |
+| 5 | ANN (IVF, HNSW) | 7–10 | 7 | next |
+| 6 | Hybrid and rerank | 5–6 | 8 | planned |
+| 7 | Generation | 6–8 | 9.5 | planned |
+| 8 | Agent loop | 5–7 | 11 | planned |
+| 9 | Serving and production | 7–9 | 13 | planned |
+| 10 | Frontend, CI, deploy | 5–7 | 14.5 | planned |
+| 11 | Framework benchmark and write-up | 4–5 | 15.5 | planned |
 
 That is about **15 weeks part-time**, or 7–8 weeks near full-time, and roughly 4–6k lines of your own code. If time is tight, the **cut line is after Phase 7** (about 9–10 weeks). Phases 8–11 are depth and polish, but Phases 10–11 are what make it presentable, so don't skip them entirely: shrink 8 and 9 instead.
 
