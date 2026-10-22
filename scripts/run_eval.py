@@ -12,6 +12,9 @@ from pathlib import Path
 
 from cairn import config
 from cairn.config import load_settings
+from cairn.dense.flat_index import FlatIndex
+from cairn.dense.models import MODELS, load_embedder
+from cairn.dense.retriever import DenseRetriever
 from cairn.evaluation.baselines import (
     FirstNRetriever,
     OracleRetriever,
@@ -34,7 +37,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--questions", type=Path, default=default_questions)
     parser.add_argument("--corpus", type=Path, default=settings.data_dir / "raw" / "fastapi")
     parser.add_argument(
-        "--retriever", choices=["random", "first", "oracle", "bm25"], default="random"
+        "--retriever", choices=["random", "first", "oracle", "bm25", "dense"], default="random"
     )
     parser.add_argument("--split", choices=["dev", "test"], default="dev")
     parser.add_argument("--k", type=int, default=10)
@@ -46,6 +49,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--chunks", type=Path, default=settings.data_dir / "chunks.jsonl")
     parser.add_argument("--k1", type=float, default=1.2)
     parser.add_argument("--b", type=float, default=0.75)
+    parser.add_argument("--model", choices=list(MODELS), default="bge-small")
+    parser.add_argument("--dense-index", type=Path, default=None)
+    parser.add_argument("--no-query-prefix", action="store_true")
     args = parser.parse_args(argv)
 
     # TODO 1: refuse the test split unless --use-test-set was given
@@ -72,6 +78,23 @@ def main(argv: list[str] | None = None) -> int:
         try:
             retriever = BM25Retriever(
                 InvertedIndex.load(args.index), read_chunks(args.chunks), k1=args.k1, b=args.b
+            )
+        except (ValueError, JsonlError) as e:
+            print(f"error: {e}", file=sys.stderr)
+            return 1
+    elif args.retriever == "dense":
+        dense_index = args.dense_index or settings.data_dir / f"dense-{args.model}.npz"
+        if not dense_index.is_file():
+            print(f"error: {dense_index} not found (run scripts/embed_chunks.py)", file=sys.stderr)
+            return 1
+        if not args.chunks.is_file():
+            print(f"error: {args.chunks} not found (run scripts/ingest.py)", file=sys.stderr)
+            return 1
+        try:
+            retriever = DenseRetriever(
+                load_embedder(args.model, use_query_prefix=not args.no_query_prefix),
+                FlatIndex.load(dense_index),
+                read_chunks(args.chunks),
             )
         except (ValueError, JsonlError) as e:
             print(f"error: {e}", file=sys.stderr)

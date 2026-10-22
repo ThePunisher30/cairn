@@ -187,3 +187,59 @@ Command: `python scripts/ablate_bm25.py --tune structure-300 --tokenizer split`.
 3. **The chunker matters, and the ranking agrees with Phase 2 on the low end.** With splitting, structure-300 has the best MRR (0.660), then fixed-400 (0.597), recursive-400 (0.562) and fixed-200 (0.514), the same worst chunker as in the Phase 2 integrity table (0.46). The orders do not match exactly: fixed-400 has the best hit@10 (0.850 against 0.800) although only 0.78 of its answers are intact. Bigger chunks contain more of the question's words, so they are found within 10 results more often but rank lower, and hit@10 gives credit for any overlap with the answer, even when the answer is cut across chunks.
 4. **The defaults are about the best.** The best cell of the grid is `k1 = 1.2, b = 0.75` (0.660). Nearby cells are within 0.02 (`k1 = 0.9`: 0.654, `k1 = 1.5`: 0.651), which is noise on 40 questions, so the defaults stay. Two cells are very informative: `b = 0` gives about 0.32 for every `k1`, half the score, because without length normalisation the chunks that are very long (the 76 code chunks over 512 tokens, up to 7,124) collect matches from many words and outrank the focused chunks. `k1 = 0`, where only the presence of a word counts and not how often it occurs, gives 0.314 for every `b`: term frequency is worth about 0.35 of MRR. `b = 1` hurts at large `k1` (0.465 at `k1 = 3`) because it penalises long chunks too much, and some correct chunks are long.
 5. **Keyword baseline for Phases 4-6: `structure-300` chunks, the `split` tokenizer, no stopwords, `k1 = 1.2`, `b = 0.75`.** MRR 0.660, hit@10 0.800, p95 search time 4 ms.
+
+## Phase 4: dense retrieval
+
+Same 3,267 `structure-300` chunks and the same 40 dev questions as Phase 3. Each chunk (its heading plus text) is embedded once with `bge-small` (384 dimensions) and a question is matched to chunks by dot product of unit vectors (cosine). The index is a flat matrix searched by brute force.
+
+| Retriever | hit@1 | hit@5 | hit@10 | recall@10 | MRR | nDCG@10 | p50 search |
+|---|---|---|---|---|---|---|---|
+| BM25 (Phase 3) | 0.600 | 0.750 | 0.800 | 0.750 | 0.660 | 0.658 | 2.6 ms |
+| **Dense, bge-small** | 0.600 | 0.825 | 0.925 | 0.863 | 0.711 | 0.723 | 111.7 ms |
+| Dense, bge-small, no query prefix | 0.450 | 0.800 | 0.825 | 0.762 | 0.605 | 0.634 | 134.8 ms |
+| Dense, minilm | 0.350 | n/a | 0.800 | n/a | 0.492 | 0.529 | n/a |
+
+By question category (MRR, with hit@10 in brackets):
+
+| Category | n | BM25 | Dense bge-small |
+|---|---|---|---|
+| lexical | 10 | 1.000 (1.000) | 0.817 (1.000) |
+| semantic | 10 | 0.432 (0.800) | 0.724 (0.900) |
+| multi_chunk | 10 | 0.658 (0.800) | 0.700 (0.900) |
+| code | 10 | 0.550 (0.600) | 0.602 (0.900) |
+
+Commands: `python scripts/embed_chunks.py`, `python scripts/run_eval.py --retriever dense` (also with `--no-query-prefix`), `python scripts/ablate_dense.py --by-category`, `python scripts/bench_embed.py --model bge-small`. The test split was not used. One question is 0.025 of a hit rate, so differences below about 0.05 are noise.
+
+### What this shows
+
+1. **Dense finds the answer more often than BM25.** hit@10 goes from 0.800 to 0.925 and recall@10 from 0.750 to 0.863: 3 questions are missed instead of 8. The largest gain is on `code` (hit@10 0.600 to 0.900).
+2. **Dense wins on meaning and loses on exact words.** Semantic MRR goes from 0.432 to 0.724 (hit@1 from 0.300 to 0.700). Lexical MRR falls from 1.000 to 0.817: every lexical answer is still in the top 10, but only 7 of the 10 are at rank 1. The other three are at rank 2 or 3 (q004, q005, q007), and for two of them (q005, q007) the top result is another chunk of the right page.
+3. **hit@1 is the same (0.600).** The gain is in recall within the top 10, not in putting the answer first, so "dense ranks better" is not supported by this data, "dense recalls more" is.
+4. **The two retrievers fail on different questions.** At rank 1: both are right on 17, only BM25 on 7, only dense on 7, neither on 9. At least one is right on 31 of 40 (0.775), against 0.600 for each alone. This is the case for hybrid retrieval in Phase 6.
+5. **The query prefix is worth a lot, on this setup.** Without bge's "Represent this sentence for searching relevant passages: " prefix, MRR falls from 0.711 to 0.605, hit@10 from 0.925 to 0.825, and 4 more questions are missed (q016, q026, q031, q034). Every category is lower. It is not a general law: with the three other chunkers the prefix changes MRR by at most 0.012 in either direction (see below), so the gain is large only for `structure-300`. I did not find out why.
+6. **The model matters.** `minilm` (384 dimensions too, no prefix) reaches MRR 0.492 against 0.711 for `bge-small`, and its lexical MRR is only 0.526. The bigger gain comes from the model, not from the chunker or the settings.
+7. **It costs a lot more than BM25.** A search takes 112 ms (p50) against 2.6 ms, about 40 times, mostly to embed the question on the CPU. Building the index took 471 s for the 2,802 distinct chunk texts (465 chunks are exact duplicates of another chunk, mostly repeated tutorial code, and were taken from the cache). A second run takes 0.0 s. The index itself is small: 3,267 x 384 x 4 bytes = 5.0 MB, which scales to 154 MB per 100,000 chunks.
+8. **83 chunks are over the model's 512-token limit** and are truncated: the model never sees their tail. (BM25 had 76 over the same limit with a different tokenizer, and the two counts are not comparable.)
+
+### Experiments: chunkers (bge-small)
+
+| Chunker | Chunks | Prefix | hit@1 | hit@10 | MRR | nDCG@10 | MRR lexical | MRR semantic | MRR multi_chunk | MRR code |
+|---|---|---|---|---|---|---|---|---|---|---|
+| fixed-200 | 2,576 | on | 0.325 | 0.675 | 0.431 | 0.453 | 0.408 | 0.472 | 0.544 | 0.298 |
+| fixed-200 | 2,576 | off | 0.325 | 0.700 | 0.443 | 0.470 | 0.408 | 0.485 | 0.517 | 0.363 |
+| fixed-400 | 1,477 | on | 0.250 | 0.750 | 0.448 | 0.496 | 0.400 | 0.550 | 0.562 | 0.281 |
+| fixed-400 | 1,477 | off | 0.250 | 0.775 | 0.440 | 0.494 | 0.375 | 0.536 | 0.552 | 0.298 |
+| recursive-400 | 1,561 | on | 0.300 | 0.750 | 0.457 | 0.501 | 0.408 | 0.544 | 0.583 | 0.292 |
+| recursive-400 | 1,561 | off | 0.300 | 0.750 | 0.450 | 0.492 | 0.408 | 0.509 | 0.588 | 0.295 |
+| **structure-300** | 3,267 | on | **0.600** | **0.925** | **0.711** | **0.723** | 0.817 | 0.724 | 0.700 | 0.602 |
+| structure-300 | 3,267 | off | 0.450 | 0.825 | 0.605 | 0.634 | 0.767 | 0.600 | 0.533 | 0.520 |
+
+1. **The chunker matters more than anything else tried.** `structure-300` has MRR 0.711 against 0.431 to 0.457 for the three size-based chunkers, and hit@1 0.600 against 0.250 to 0.325. It does this with the most chunks (3,267), so there are more places to go wrong, not fewer. The order of the chunkers agrees with BM25 in Phase 3 (structure-300 first) and with the integrity table of Phase 2.
+2. **Dense hardly helps the size-based chunkers' ranking.** For `fixed-400` and `recursive-400` the dense MRR (0.448, 0.457) is below their BM25 MRR with the split tokenizer (0.597, 0.562). Only for `structure-300` is dense above BM25 (0.711 against 0.660). I did not investigate why.
+3. **Do not read the prefix on/off differences of the size-based chunkers.** They are at most 0.012 MRR and change sign from row to row, which is one or two questions.
+
+Dense retrieval baseline for Phases 5-6: `structure-300` chunks, `bge-small`, trained query prefix, flat index. MRR 0.711, hit@10 0.925, p50 search time 112 ms.
+
+### Embedding speed
+
+Sorting the chunks by length before batching makes the model faster (padding is wasted work): on a sample of 160 chunks, 5.4 chunks/s in the original order (batch 32) against 8.9 chunks/s sorted (batch 16), 1.65 times faster, and batch 16 was better than 8 or 32. The real run (5.9 chunks/s) was slower than the benchmark predicted (about 366 s for the corpus, 471 s measured); I did not find out why.
