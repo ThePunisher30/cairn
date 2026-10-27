@@ -1,7 +1,10 @@
 import heapq
 import math
+from pathlib import Path
 
 import numpy as np
+
+FORMAT_VERSION = 1
 
 
 class HNSWIndex:
@@ -15,6 +18,9 @@ class HNSWIndex:
         ef_search=50,
         seed=0,
         heuristic=True,
+        _links=None,
+        _levels=None,
+        _entry=None,
     ):
         vectors = np.asarray(vectors, dtype=np.float32)
         if vectors.ndim != 2:
@@ -34,13 +40,18 @@ class HNSWIndex:
         self.last_n_distances = 0
 
         n = len(vectors)
-        rng = np.random.default_rng(seed)
-        ml = 1.0 / math.log(M)
-        self.levels = np.floor(-np.log(1.0 - rng.random(n)) * ml).astype(np.int64)
-        self._links = [[[] for _ in range(int(top) + 1)] for top in self.levels]
-        self.entry_point = 0 if n else None
-        for i in range(1, n):
-            self._insert(i)
+        if _links is not None:  # loading from disk: the graph is already built
+            self.levels = _levels
+            self._links = _links
+            self.entry_point = _entry
+        else:
+            rng = np.random.default_rng(seed)
+            ml = 1.0 / math.log(M)
+            self.levels = np.floor(-np.log(1.0 - rng.random(n)) * ml).astype(np.int64)
+            self._links = [[[] for _ in range(int(top) + 1)] for top in self.levels]
+            self.entry_point = 0 if n else None
+            for i in range(1, n):
+                self._insert(i)
         self.max_level = int(self.levels[self.entry_point]) if n else -1
         self.last_n_distances = 0  # the work of building is not the work of a search
 
@@ -54,6 +65,14 @@ class HNSWIndex:
 
     def neighbors(self, node, level):
         return list(self._links[node][level])
+
+    @property
+    def n_links(self):
+        return sum(len(links) for node in self._links for links in node)
+
+    @property
+    def extra_nbytes(self):
+        return 4 * self.n_links + 8 * self.n_docs
 
     def _sims(self, nodes, q):
         """Similarity of the query to several vectors at once; every one is counted."""
@@ -154,3 +173,54 @@ class HNSWIndex:
             entry = [self._search_layer(query, entry, 1, lv)[0][1]]
         found = self._search_layer(query, entry, ef, 0)
         return [(int(e), float(s)) for s, e in found[:k]]
+
+    def save(self, path):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        slots = [links for node in self._links for links in node]  # one list per (node, layer)
+        ptr = np.concatenate([[0], np.cumsum([len(links) for links in slots])]).astype(np.int64)
+        edges = np.array([e for links in slots for e in links], dtype=np.int32)
+        with open(path, "wb") as f:
+            np.savez(
+                f,
+                version=np.array(FORMAT_VERSION),
+                kind=np.array("hnsw"),
+                vectors=self.vectors,
+                doc_ids=np.array(self.doc_ids, dtype=str),
+                levels=self.levels,
+                ptr=ptr,
+                edges=edges,
+                entry_point=np.array(-1 if self.entry_point is None else self.entry_point),
+                params=np.array(
+                    [self.M, self.ef_construction, self.ef_search, int(self.heuristic)]
+                ),
+            )
+
+    @classmethod
+    def load(cls, path):
+        with np.load(path, allow_pickle=False) as data:
+            ok = "version" in data and int(data["version"]) == FORMAT_VERSION
+            if not ok or "kind" not in data or str(data["kind"]) != "hnsw":
+                raise ValueError(f"{path} is not a version-{FORMAT_VERSION} HNSW index file")
+            levels = data["levels"]
+            ptr, edges = data["ptr"], data["edges"]
+            links, slot = [], 0
+            for top in levels:
+                node = []
+                for _ in range(int(top) + 1):
+                    node.append(edges[ptr[slot] : ptr[slot + 1]].tolist())
+                    slot += 1
+                links.append(node)
+            M, ef_construction, ef_search, heuristic = (int(v) for v in data["params"])
+            entry = int(data["entry_point"])
+            return cls(
+                data["vectors"],
+                data["doc_ids"].tolist(),
+                M=M,
+                ef_construction=ef_construction,
+                ef_search=ef_search,
+                heuristic=bool(heuristic),
+                _links=links,
+                _levels=levels,
+                _entry=None if entry < 0 else entry,
+            )
