@@ -91,7 +91,23 @@ class HNSWIndex:
 
     def _select(self, scored, limit):
         """Pick which neighbours to keep from (similarity, row) pairs, best first."""
-        return [e for _, e in scored[:limit]]
+        if not self.heuristic:
+            return [e for _, e in scored[:limit]]
+        chosen, pruned = [], []
+        for s, e in scored:
+            if len(chosen) >= limit:
+                break
+            if chosen:
+                to_chosen = self.vectors[chosen] @ self.vectors[e]
+                if s <= float(to_chosen.max()):
+                    pruned.append(e)
+                    continue
+            chosen.append(e)
+        for e in pruned:
+            if len(chosen) >= limit:
+                break
+            chosen.append(e)
+        return chosen
 
     def _insert(self, i):
         """Link the new node i into the graph that holds rows 0 .. i-1."""
