@@ -1,0 +1,226 @@
+import heapq
+import math
+from pathlib import Path
+
+import numpy as np
+
+FORMAT_VERSION = 1
+
+
+class HNSWIndex:
+    def __init__(
+        self,
+        vectors,
+        doc_ids,
+        *,
+        M=16,
+        ef_construction=100,
+        ef_search=50,
+        seed=0,
+        heuristic=True,
+        _links=None,
+        _levels=None,
+        _entry=None,
+    ):
+        vectors = np.asarray(vectors, dtype=np.float32)
+        if vectors.ndim != 2:
+            raise ValueError("Vectors must be a 2-D array (one row per chunk)")
+        if len(doc_ids) != len(vectors):
+            raise ValueError("There must be exactly one doc id per vector")
+        if M < 2:
+            raise ValueError("M must be at least 2")
+        if ef_construction < 1 or ef_search < 1:
+            raise ValueError("ef_construction and ef_search must be at least 1")
+        self.vectors = vectors
+        self.doc_ids = list(doc_ids)
+        self.M = M
+        self.ef_construction = ef_construction
+        self.ef_search = ef_search
+        self.heuristic = heuristic
+        self.last_n_distances = 0
+
+        n = len(vectors)
+        if _links is not None:  # loading from disk: the graph is already built
+            self.levels = _levels
+            self._links = _links
+            self.entry_point = _entry
+        else:
+            rng = np.random.default_rng(seed)
+            ml = 1.0 / math.log(M)
+            self.levels = np.floor(-np.log(1.0 - rng.random(n)) * ml).astype(np.int64)
+            self._links = [[[] for _ in range(int(top) + 1)] for top in self.levels]
+            self.entry_point = 0 if n else None
+            for i in range(1, n):
+                self._insert(i)
+        self.max_level = int(self.levels[self.entry_point]) if n else -1
+        self.last_n_distances = 0  # the work of building is not the work of a search
+
+    @property
+    def n_docs(self):
+        return len(self.vectors)
+
+    @property
+    def dim(self):
+        return self.vectors.shape[1]
+
+    def neighbors(self, node, level):
+        return list(self._links[node][level])
+
+    @property
+    def n_links(self):
+        return sum(len(links) for node in self._links for links in node)
+
+    @property
+    def extra_nbytes(self):
+        return 4 * self.n_links + 8 * self.n_docs
+
+    def _sims(self, nodes, q):
+        """Similarity of the query to several vectors at once; every one is counted."""
+        self.last_n_distances += len(nodes)
+        return self.vectors[nodes] @ q
+
+    def _search_layer(self, q, entries, ef, level):
+        """Walk one layer from the entry nodes; return the best ef found as (similarity, row)."""
+        visited = set(entries)
+        sims = self._sims(list(entries), q)
+        # to expand: best first. heapq pops the smallest, so we store the negated similarity
+        candidates = [(-float(s), e) for s, e in zip(sims, entries, strict=True)]
+        heapq.heapify(candidates)
+        # the best ef so far: the worst on top, so it is the one thrown out when a better one comes
+        results = [(float(s), -e) for s, e in zip(sims, entries, strict=True)]
+        heapq.heapify(results)
+        while len(results) > ef:
+            heapq.heappop(results)
+        while candidates:
+            neg, c = heapq.heappop(candidates)
+            if len(results) >= ef and -neg < results[0][0]:
+                break  # the best unexpanded node is worse than all we keep: nothing can improve
+            new = [e for e in self._links[c][level] if e not in visited]
+            if not new:
+                continue
+            visited.update(new)
+            for s, e in zip(self._sims(new, q), new, strict=True):
+                s = float(s)
+                if len(results) < ef or s > results[0][0]:
+                    heapq.heappush(candidates, (-s, e))
+                    heapq.heappush(results, (s, -e))
+                    if len(results) > ef:
+                        heapq.heappop(results)
+        return sorted(((s, -e) for s, e in results), key=lambda t: (-t[0], t[1]))
+
+    def _select(self, scored, limit):
+        """Pick which neighbours to keep from (similarity, row) pairs, best first."""
+        if not self.heuristic:
+            return [e for _, e in scored[:limit]]
+        chosen, pruned = [], []
+        for s, e in scored:
+            if len(chosen) >= limit:
+                break
+            if chosen:
+                to_chosen = self.vectors[chosen] @ self.vectors[e]
+                if s <= float(to_chosen.max()):
+                    pruned.append(e)
+                    continue
+            chosen.append(e)
+        for e in pruned:
+            if len(chosen) >= limit:
+                break
+            chosen.append(e)
+        return chosen
+
+    def _insert(self, i):
+        """Link the new node i into the graph that holds rows 0 .. i-1."""
+        q = self.vectors[i]
+        level = int(self.levels[i])
+        top = int(self.levels[self.entry_point])
+        entry = [self.entry_point]
+        # above the new node's own top layer: only travel down, one best node per layer
+        for lv in range(top, level, -1):
+            entry = [self._search_layer(q, entry, 1, lv)[0][1]]
+        # from there down to layer 0: find neighbours, link both ways
+        for lv in range(min(level, top), -1, -1):
+            found = self._search_layer(q, entry, self.ef_construction, lv)
+            chosen = self._select(found, self.M)
+            self._links[i][lv] = list(chosen)
+            cap = 2 * self.M if lv == 0 else self.M
+            for e in chosen:
+                links = self._links[e][lv]
+                links.append(i)
+                if len(links) > cap:  # too many friends: keep only the closest ones
+                    sims = self.vectors[links] @ self.vectors[e]
+                    ranked = sorted(
+                        zip(sims.tolist(), links, strict=True), key=lambda t: (-t[0], t[1])
+                    )
+                    self._links[e][lv] = self._select(ranked, cap)
+            entry = [e for _, e in found]
+        if level > top:
+            self.entry_point = i
+
+    def search(self, query, k, ef=None):
+        if k <= 0 or self.n_docs == 0:
+            return []
+        query = np.asarray(query, dtype=np.float32)
+        if query.shape != (self.dim,):
+            raise ValueError(f"query must have shape ({(self.dim,)}), got {query.shape}")
+        ef = self.ef_search if ef is None else ef
+        if ef < 1:
+            raise ValueError("ef must be atleast 1")
+        ef = max(ef, k)  # a beam narrower than k could never return k results
+        self.last_n_distances = 0
+        entry = [self.entry_point]
+        # upper layers: one hop-to-the-best per layer, the winner starts the next layer down
+        for lv in range(self.max_level, 0, -1):
+            entry = [self._search_layer(query, entry, 1, lv)[0][1]]
+        found = self._search_layer(query, entry, ef, 0)
+        return [(int(e), float(s)) for s, e in found[:k]]
+
+    def save(self, path):
+        path = Path(path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        slots = [links for node in self._links for links in node]  # one list per (node, layer)
+        ptr = np.concatenate([[0], np.cumsum([len(links) for links in slots])]).astype(np.int64)
+        edges = np.array([e for links in slots for e in links], dtype=np.int32)
+        with open(path, "wb") as f:
+            np.savez(
+                f,
+                version=np.array(FORMAT_VERSION),
+                kind=np.array("hnsw"),
+                vectors=self.vectors,
+                doc_ids=np.array(self.doc_ids, dtype=str),
+                levels=self.levels,
+                ptr=ptr,
+                edges=edges,
+                entry_point=np.array(-1 if self.entry_point is None else self.entry_point),
+                params=np.array(
+                    [self.M, self.ef_construction, self.ef_search, int(self.heuristic)]
+                ),
+            )
+
+    @classmethod
+    def load(cls, path):
+        with np.load(path, allow_pickle=False) as data:
+            ok = "version" in data and int(data["version"]) == FORMAT_VERSION
+            if not ok or "kind" not in data or str(data["kind"]) != "hnsw":
+                raise ValueError(f"{path} is not a version-{FORMAT_VERSION} HNSW index file")
+            levels = data["levels"]
+            ptr, edges = data["ptr"], data["edges"]
+            links, slot = [], 0
+            for top in levels:
+                node = []
+                for _ in range(int(top) + 1):
+                    node.append(edges[ptr[slot] : ptr[slot + 1]].tolist())
+                    slot += 1
+                links.append(node)
+            M, ef_construction, ef_search, heuristic = (int(v) for v in data["params"])
+            entry = int(data["entry_point"])
+            return cls(
+                data["vectors"],
+                data["doc_ids"].tolist(),
+                M=M,
+                ef_construction=ef_construction,
+                ef_search=ef_search,
+                heuristic=bool(heuristic),
+                _links=links,
+                _levels=levels,
+                _entry=None if entry < 0 else entry,
+            )

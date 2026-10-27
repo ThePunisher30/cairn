@@ -243,3 +243,186 @@ Dense retrieval baseline for Phases 5-6: `structure-300` chunks, `bge-small`, tr
 ### Embedding speed
 
 Sorting the chunks by length before batching makes the model faster (padding is wasted work): on a sample of 160 chunks, 5.4 chunks/s in the original order (batch 32) against 8.9 chunks/s sorted (batch 16), 1.65 times faster, and batch 16 was better than 8 or 32. The real run (5.9 chunks/s) was slower than the benchmark predicted (about 366 s for the corpus, 471 s measured); I did not find out why.
+
+## Phase 5: approximate nearest-neighbour indexes
+
+Two indexes written from scratch with numpy (no `faiss`, `scikit-learn`, `hnswlib`): **IVF** (spherical k-means with k-means++ starts, then search only the `nprobe` closest of `nlist` lists) and **HNSW** (a layered graph of neighbour links, searched with a beam). Both are measured against the flat index of Phase 4, which is the exact answer.
+
+**The 100,000-vector set is synthetic.** The corpus has only 3,267 chunks, where no index can beat a flat scan, so `scripts/make_scale_set.py` makes 100,000 vectors, each a mix of two real chunk vectors plus noise, scaled to length 1 (queries are made the same way, 200 of them are used). It has the shape of real embeddings (384 numbers, unit length) but it is not real text, and its clusters may be easier or harder than the real ones: the real-corpus section below shows IVF doing much worse there. Everything marked "scale set" is this data, everything marked "real" is the 3,267 real chunk vectors with the 40 dev questions. The test split was not used.
+
+Measures: **recall@10** is the share of the flat index's exact top 10 that the index also returned. **Distances** is the number of dot products computed per query (for IVF, the `nlist` centre scores plus every vector scanned): it does not depend on the machine. **Queries/s** does, and it is noisy: the same flat index measured 141 to 175 queries/s in different runs, and one IVF setting (`nprobe = 2`) 1,297 and 1,616, so only differences of about 2 times or more mean anything. Recall is from 200 queries x 10 neighbours, so 0.001 is 2 neighbours and differences of about 0.005 are noise. Every graph is built once with seed 0.
+
+### Recall against speed on the scale set (100,000 vectors)
+
+Flat: recall 1.000, 100,000 distances, 141 to 175 queries/s, vectors 153.6 MB.
+
+| Index | recall@10 | distances | queries/s |
+|---|---|---|---|
+| IVF `nlist` 316, `nprobe` 1 | 0.868 | 760 | 2,065 to 4,179 |
+| IVF 316, `nprobe` 2 | 0.953 | 1,207 | 1,297 to 1,616 |
+| IVF 316, `nprobe` 6 | 0.992 | 2,908 | 439 |
+| IVF 316, `nprobe` 8 | 0.995 | 3,731 | 226 to 300 |
+| IVF 316, `nprobe` 48 | 1.000 | 18,653 | 50 |
+| HNSW `M` 16, `ef` 10 | 0.921 | 231 | 1,575 to 2,229 |
+| HNSW 16, `ef` 30 | 0.967 | 355 | 835 |
+| HNSW 16, `ef` 60 | 0.990 | 560 | 571 |
+| HNSW 16, `ef` 80 | 0.993 | 695 | 469 to 728 |
+| HNSW 16, `ef` 160 | 0.999 | 1,250 | 294 |
+| HNSW 16, `ef` 320 | 0.999 | 2,479 | 140 to 184 |
+
+![recall against queries per second, scale set](ann-recall-vs-speed.png)
+
+Commands: `python scripts/make_scale_set.py`, `python bench/ann.py --scale data/scale-100000.npz --n-queries 200 [--nlist ...] [--M ...] [--ef-construction ...] [--ef-searches ...] [--plot ...]`.
+
+### What this shows
+
+1. **Both indexes look at a small fraction of the data.** For recall of at least 0.95, IVF computes 1,207 distances and HNSW 355, against 100,000: 83 and 282 times fewer. For at least 0.99 it is 2,908 (`nlist` 316) or 2,156 (`nlist` 1000) for IVF and 560 for HNSW: 3.9 to 5.2 times more for IVF than HNSW.
+2. **In time the gain is much smaller than in distances.** HNSW at recall 0.99 does 144 to 179 times fewer distances than flat but is only about 3 to 5 times faster (571 to 728 against 141 to 175 queries/s). Flat is one matrix product in numpy; the HNSW walk is a Python loop that computes a few dozen distances at a time. I did not profile it, so that is my explanation, not a measurement.
+3. **At recall 0.95 HNSW has no clear speed advantage over IVF.** The queries/s ranges overlap (IVF 1,297 to 1,616 at 0.953; HNSW 835 to 1,894 at 0.943 to 0.967), and IVF builds 16 times faster with 9 times less memory (table below). From about 0.98 up HNSW is ahead by roughly 1.3 to 3 times (0.99: HNSW 571 to 728, IVF 439 and 226 to 300 at 0.992 and 0.995).
+4. **The last point of recall is expensive in both.** IVF goes from 0.953 to 0.995 for 1,207 to 3,731 distances, and to 1.000 for 18,653. HNSW stops at 0.999 for `ef` from 160 to 320 and 2 of 2,000 neighbours were never found (`M` 16 and 32); I did not find out why. Nothing short of a scan of a large part of the data was exact.
+5. **The brief's target is met.** HNSW reaches recall 0.95 or more (0.967 at `ef` 30) and answers about 835 queries/s against about 150 for flat.
+
+### Build time and memory (scale set)
+
+| Index | build | extra memory (on top of the 153.6 MB of vectors) |
+|---|---|---|
+| IVF `nlist` 100 | 19.6 s | 0.95 MB |
+| IVF 316 | 30.7 s | 1.29 MB |
+| IVF 1000 | 54.5 s | 2.34 MB |
+| HNSW `M` 16, `efConstruction` 100 | 482 s | 11.38 MB |
+
+IVF memory is 8 bytes per vector (`int64` row numbers) plus the centres (316 x 384 x 4 = 0.49 MB). HNSW memory is 4 bytes per link plus 8 per node: 2,645,462 x 4 + 100,000 x 8 = 11.38 MB, 7% of the vectors. The HNSW build is pure Python, 4.8 ms per inserted vector. Build times were measured on different days with other programs open: compare them to within about 20%, not to the second.
+
+### Experiment: IVF `nlist` against `nprobe`
+
+The smallest tested `nprobe` that reaches each recall (the tested values were 1, 2, 3, 4, 6, 8, 12, ..., so the true threshold can be a little lower):
+
+| `nlist` | `nprobe` for 0.95 | distances | `nprobe` for 0.99 | distances |
+|---|---|---|---|---|
+| 100 | 3 (0.965) | 4,294 | 12 (0.997) | 14,928 |
+| 316 | 2 (0.953) | 1,207 | 6 (0.992) | 2,908 |
+| 1,000 | 2 (0.969) | 1,301 | 8 (0.995) | 2,156 |
+
+1. **`nlist` 316 (about the square root of 100,000) is best at 0.95, 1,000 is best at 0.99.** Too few lists (100) make every list large (1,000 vectors on average, and the lists are uneven), so each probe is expensive: 3 to 7 times more distances than the others. More lists make the lists small but add `nlist` centre scores to every search, a fixed cost that is 1,000 of the 1,301 distances of `nlist` 1000 at `nprobe` 2.
+2. **A model fits.** Cost is about `nlist + nprobe x s x n / nlist` with `s` about 1.4 to 1.5, because the lists are uneven: `nprobe` 1 scans 444 vectors on average at `nlist` 316 where an even split would give 316, and 1.4 to 1.5 times the average at the other two. Minimising it gives `nlist = sqrt(nprobe x s x n)`: 374 for `nprobe` 1, 1,058 for `nprobe` 8. The measurements agree with this: the best `nlist` moves up as the recall target (and so the needed `nprobe`) rises.
+3. **The share of lists to probe falls as `nlist` grows**: for 0.99, 12% of the lists at `nlist` 100, 1.9% at 316, 0.8% at 1,000. The number of lists to probe does not grow with `nlist`.
+4. **The price of more lists** is build time (19.6, 30.7, 54.5 s) and memory (0.95, 1.29, 2.34 MB), both small.
+
+### Experiment: HNSW `M` (scale set, `efConstruction` 100)
+
+| `M` | build | extra memory | top layer | `ef` for recall 0.99 | distances there |
+|---|---|---|---|---|---|
+| 8 | 269 s | 6.27 MB | 6 | not reached (0.998 at `ef` 320) | 1,661 |
+| **16** | 482 s | 11.38 MB | 4 | 60 (0.990) | **560** |
+| 32 | 917 s | 21.53 MB | 3 | 80 (0.992) | 986 |
+
+Recall by `ef` (distances in brackets):
+
+| `ef` | M 8 | M 16 | M 32 |
+|---|---|---|---|
+| 10 | 0.792 (179) | 0.921 (231) | 0.919 (314) |
+| 20 | 0.850 (227) | 0.943 (283) | 0.941 (382) |
+| 40 | 0.923 (331) | 0.973 (427) | 0.968 (587) |
+| 80 | 0.975 (515) | 0.993 (695) | 0.992 (986) |
+| 160 | 0.981 (873) | 0.999 (1,250) | 0.999 (1,820) |
+| 320 | 0.998 (1,661) | 0.999 (2,479) | 0.999 (3,700) |
+
+1. **`M` 16 is the best of the three.** `M` 8 saves half the memory but cannot reach 0.99 below `ef` 320. `M` 32 reaches the same recall as 16 with 1.4 to 1.8 times the distances, twice the memory and twice the build time.
+2. **Memory and build time grow about in step with `M`** (11.38 to 21.53 MB, 482 to 917 s).
+3. **The top layer fits theory:** `ln(100000) / ln(M)` is 5.5, 4.2 and 3.3 and the builds reached 6, 4 and 3.
+
+### Experiment: HNSW `efConstruction` (scale set, `M` 16)
+
+| `efConstruction` | build | `ef` 80 | `ef` 160 | `ef` 320 |
+|---|---|---|---|---|
+| 40 | 297 s | 0.954 (565) | 0.981 (990) | 0.994 (1,943) |
+| **100** | 482 s | 0.993 (695) | 0.999 (1,250) | 0.999 (2,479) |
+| 200 | 693 s | 0.987 (823) | 0.999 (1,487) | 0.999 (2,884) |
+
+1. **40 is too small:** 4 points less recall at `ef` 80, and 0.994 is the most it reaches.
+2. **200 buys nothing measurable.** Recall is equal or slightly lower (0.987 against 0.993 at `ef` 80 is within noise) and the build is 1.44 times longer. The builder pays and the searcher does not benefit. At the same `ef` a search even computes about 18% more distances (823 against 695); the graphs have the same number of links (11.43 and 11.38 MB), and I did not find out why.
+3. Only three values were tried; the best could lie between 40 and 100.
+
+### Experiment: the neighbour-selection heuristic (scale set, `M` 16, `efConstruction` 100)
+
+| `ef` | heuristic on | heuristic off (the `M` closest) |
+|---|---|---|
+| 10 | 0.921 (231) | 0.572 (221) |
+| 20 | 0.943 (283) | 0.699 (281) |
+| 40 | 0.973 (427) | 0.825 (388) |
+| 80 | 0.993 (695) | 0.913 (572) |
+| 160 | 0.999 (1,250) | 0.950 (909) |
+| 320 | 0.999 (2,479) | 0.969 (1,650) |
+
+1. **This is the largest effect in the phase.** Without the heuristic recall never reaches 0.99, even at `ef` 320 (0.969, 1,650 distances), while with it the graph reaches 0.990 at `ef` 60 (560 distances). At equal cost the heuristic graph is far better: 0.997 at 966 distances against 0.950 at 909.
+2. **It costs build time:** 482 s against 198 s (2.4 times; the two builds were measured in different runs). The number of links is almost the same (2.645 million against 2.600 million) and the top layer is the same.
+3. The usual explanation is that on clustered data the `M` closest all lie in the same cluster, so nothing leads out of it, and the heuristic keeps neighbours in different directions. The scale set is clustered by construction. I did not test the explanation directly, and I did not try non-clustered data.
+
+### Experiment: do the upper layers matter? (same graph, searched with and without them)
+
+Without the layers the layer-0 beam starts at the entry vector. Recall without minus recall with the layers (a minus sign means the layers are better), at the same `ef`; distances were within a few percent except at the 100,000-vector set (below).
+
+| Data | `ef` 10 | `ef` 20 | `ef` 40 | `ef` 80 | `ef` 160 |
+|---|---|---|---|---|---|
+| 5,000 vectors (scale set) | -0.005 | -0.003 | 0 | 0 | 0 |
+| 100,000 vectors (scale set) | -0.025 | -0.011 | -0.016 | -0.005 | 0 |
+| real, 3,267, graph seed 0 | +0.038 | +0.025 | +0.023 | 0 | -0.003 |
+| real, seed 1 | +0.018 | +0.008 | 0 | 0 | 0 |
+| real, seed 2 | +0.061 | +0.020 | +0.025 | 0 | 0 |
+
+At 100,000 vectors the layers also save distances: 231 against 272 at `ef` 10 (15%), 427 against 462 at `ef` 40 (8%), 695 against 726 at `ef` 80 (4%).
+
+1. **The layers help only at large size and only at small `ef`.** At 100,000 vectors they add 0.025 recall and save 15% of the distances at `ef` 10; by `ef` 160 there is no difference. At 5,000 there is none.
+2. **On the real corpus they did not help, and at small `ef` skipping them was slightly better in all three graphs.** The graph seed alone moves recall at `ef` 10 by 0.065 (0.857 to 0.922) and there are only 40 queries, so I read this as "no benefit at 3,267 vectors", not as "they hurt". The 100,000-vector data is one graph.
+3. **What it says:** layers exist to make the first steps long, and with few vectors a short walk on layer 0 gets there anyway. Their value appears when the walk from a fixed start would be long.
+
+### The real corpus: does ANN help? (3,267 vectors, 40 dev questions)
+
+Flat: recall 1.000, 3,267 distances, **2,795 queries/s** (0.36 ms per search of the vectors, the question's embedding not included), 5.0 MB.
+
+| Index | recall@10 | distances | queries/s |
+|---|---|---|---|
+| IVF `nlist` 57, `nprobe` 1 | 0.495 | 124 | 20,311 |
+| IVF 57, `nprobe` 8 | 0.870 | 571 | 6,216 |
+| IVF 57, `nprobe` 16 | 0.943 | 1,059 | 2,961 |
+| IVF 57, `nprobe` 32 | 0.983 | 1,927 | 1,076 |
+| HNSW 16, `ef` 20 | 0.932 | 313 | 2,813 |
+| HNSW 16, `ef` 80 | 0.993 | 780 | 959 |
+
+1. **No.** At recall 0.94 IVF is as fast as the flat index (2,961 against 2,795 queries/s), and HNSW at 0.993 is about 3 times slower than flat (959). Fewer distances do not pay when a whole scan is one 0.36 ms matrix product.
+2. **IVF is much worse on the real vectors than on the scale set:** at `nprobe` 1 it computes 3.8% of the distances of a full scan (the scale set at `nlist` 316: 0.8%) and finds 0.495 of the neighbours (0.868). I did not find out why. The scale set is a poor guide to how clustered real embeddings are.
+3. The search of the vectors is not the cost of answering a question: embedding the question takes 38.5 ms (Phase 4), 100 times the 0.36 ms scan.
+
+### Does the approximation change the answers that matter? (real, dev questions)
+
+The metrics against the gold passages, for indexes plugged into `DenseRetriever`. The last column counts the questions whose set of 10 returned chunks differs from the flat index's.
+
+| Index | hit@1 | hit@10 | MRR | different from flat |
+|---|---|---|---|---|
+| flat | 0.600 | 0.925 | 0.711 | 0 of 40 |
+| IVF 57, `nprobe` 1 | 0.350 | 0.600 | 0.447 | 36 |
+| IVF 57, `nprobe` 4 | 0.475 | 0.750 | 0.572 | 27 |
+| IVF 57, `nprobe` 8 | 0.525 | 0.825 | 0.634 | 22 |
+| IVF 57, `nprobe` 16 | 0.600 | 0.900 | 0.708 | 13 |
+| HNSW 16, `ef` 10 | 0.525 | 0.825 | 0.624 | 15 |
+| HNSW 16, `ef` 40 | 0.525 | 0.850 | 0.636 | 5 |
+| HNSW 16, `ef` 80 | 0.575 | 0.900 | 0.686 | 1 |
+
+Command: `python scripts/eval_ann.py` (dev split only).
+
+1. **A low recall does cost answers.** IVF at `nprobe` 1 (recall 0.495) loses a third of the answers (hit@10 0.925 to 0.600); HNSW at `ef` 10 (recall 0.870) loses 4 questions (0.825).
+2. **Recall about 0.94 to 0.99 costs 0.025 or less in hit@10.** IVF `nprobe` 16 (recall 0.943) has MRR 0.708 against 0.711 although 13 of 40 lists differ: the neighbours it misses are mostly the low-ranked ones. HNSW at `ef` 80 (recall 0.993) changes the list of one question and loses 0.025 of hit@1 and hit@10 (one question each); I did not look at which question or whether it is the same one.
+3. Differences of 0.025 are one question.
+
+### Summary for the choice of defaults
+
+| | Value | Why |
+|---|---|---|
+| IVF `nlist` | `round(sqrt(n))` | best at 0.95 on the scale set; 1,000 (about 3 x sqrt) is better for 0.99 |
+| IVF `nprobe` | 8 | 0.995 at 316 lists, 3,731 distances; 2 gives 0.953 |
+| HNSW `M` | 16 | best of 8, 16, 32 |
+| HNSW `efConstruction` | 100 | 40 loses recall, 200 only costs build time |
+| HNSW `ef_search` | 80 | 0.993 at 695 distances |
+| HNSW heuristic | on | recall 0.993 against 0.913 at `ef` 80 |
+
+For the 3,267 chunks of the real corpus the flat index stays: it is exact and as fast. ANN is a decision about a much larger corpus (see `docs/adr/0004-ann-indexes.md`).

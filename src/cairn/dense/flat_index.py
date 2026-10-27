@@ -57,6 +57,8 @@ class FlatIndex:
     @classmethod
     def load(cls, path):
         with np.load(path, allow_pickle=False) as data:
-            if "version" not in data or int(data["version"]) != FORMAT_VERSION:
+            # IVF and HNSW files also hold "vectors" and "doc_ids" but have a "kind": do not read
+            # their graph away and hand back a plain flat index
+            if "version" not in data or int(data["version"]) != FORMAT_VERSION or "kind" in data:
                 raise ValueError(f"{path} is not a version-{FORMAT_VERSION} dense index file")
             return cls(data["vectors"], data["doc_ids"].tolist())
