@@ -158,6 +158,20 @@ def test_a_file_that_is_not_an_index_is_refused(tmp_path):
         FlatIndex.load(path)
 
 
+def test_an_ann_index_file_is_refused_not_read_as_a_flat_index(tmp_path):
+    from cairn.ann.hnsw import HNSWIndex
+    from cairn.ann.ivf import IVFIndex
+
+    vectors = np.random.default_rng(2).normal(size=(30, 8)).astype(np.float32)
+    vectors /= np.linalg.norm(vectors, axis=1, keepdims=True)
+    ids = [f"id{i}" for i in range(30)]
+    IVFIndex(vectors, ids, 3).save(tmp_path / "ivf.npz")
+    HNSWIndex(vectors, ids, M=4, ef_construction=10).save(tmp_path / "hnsw.npz")
+    for name in ("ivf.npz", "hnsw.npz"):
+        with pytest.raises(ValueError):
+            FlatIndex.load(tmp_path / name)
+
+
 def test_a_missing_file_is_a_file_not_found_error(tmp_path):
     with pytest.raises(FileNotFoundError):
         FlatIndex.load(tmp_path / "nope.npz")
