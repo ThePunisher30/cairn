@@ -38,8 +38,11 @@ class HNSWIndex:
         ml = 1.0 / math.log(M)
         self.levels = np.floor(-np.log(1.0 - rng.random(n)) * ml).astype(np.int64)
         self._links = [[[] for _ in range(int(top) + 1)] for top in self.levels]
-        self.entry_point = int(np.argmax(self.levels)) if n else None
+        self.entry_point = 0 if n else None
+        for i in range(1, n):
+            self._insert(i)
         self.max_level = int(self.levels[self.entry_point]) if n else -1
+        self.last_n_distances = 0  # the work of building is not the work of a search
 
     @property
     def n_docs(self):
@@ -85,3 +88,35 @@ class HNSWIndex:
                     if len(results) > ef:
                         heapq.heappop(results)
         return sorted(((s, -e) for s, e in results), key=lambda t: (-t[0], t[1]))
+
+    def _select(self, scored, limit):
+        """Pick which neighbours to keep from (similarity, row) pairs, best first."""
+        return [e for _, e in scored[:limit]]
+
+    def _insert(self, i):
+        """Link the new node i into the graph that holds rows 0 .. i-1."""
+        q = self.vectors[i]
+        level = int(self.levels[i])
+        top = int(self.levels[self.entry_point])
+        entry = [self.entry_point]
+        # above the new node's own top layer: only travel down, one best node per layer
+        for lv in range(top, level, -1):
+            entry = [self._search_layer(q, entry, 1, lv)[0][1]]
+        # from there down to layer 0: find neighbours, link both ways
+        for lv in range(min(level, top), -1, -1):
+            found = self._search_layer(q, entry, self.ef_construction, lv)
+            chosen = self._select(found, self.M)
+            self._links[i][lv] = list(chosen)
+            cap = 2 * self.M if lv == 0 else self.M
+            for e in chosen:
+                links = self._links[e][lv]
+                links.append(i)
+                if len(links) > cap:  # too many friends: keep only the closest ones
+                    sims = self.vectors[links] @ self.vectors[e]
+                    ranked = sorted(
+                        zip(sims.tolist(), links, strict=True), key=lambda t: (-t[0], t[1])
+                    )
+                    self._links[e][lv] = self._select(ranked, cap)
+            entry = [e for _, e in found]
+        if level > top:
+            self.entry_point = i
