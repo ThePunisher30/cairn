@@ -120,3 +120,21 @@ class HNSWIndex:
             entry = [e for _, e in found]
         if level > top:
             self.entry_point = i
+
+    def search(self, query, k, ef=None):
+        if k <= 0 or self.n_docs == 0:
+            return []
+        query = np.asarray(query, dtype=np.float32)
+        if query.shape != (self.dim,):
+            raise ValueError(f"query must have shape ({(self.dim,)}), got {query.shape}")
+        ef = self.ef_search if ef is None else ef
+        if ef < 1:
+            raise ValueError("ef must be atleast 1")
+        ef = max(ef, k)  # a beam narrower than k could never return k results
+        self.last_n_distances = 0
+        entry = [self.entry_point]
+        # upper layers: one hop-to-the-best per layer, the winner starts the next layer down
+        for lv in range(self.max_level, 0, -1):
+            entry = [self._search_layer(query, entry, 1, lv)[0][1]]
+        found = self._search_layer(query, entry, ef, 0)
+        return [(int(e), float(s)) for s, e in found[:k]]
