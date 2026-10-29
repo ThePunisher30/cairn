@@ -6,9 +6,9 @@ A from-scratch RAG engine over a real codebase and its docs. Retrieval, indexing
 
 ---
 
-## Status (updated after Phase 4)
+## Status (updated after Phase 5)
 
-**Phases 0-4 are done and merged** (PRs #1-#6). 602 tests pass. Phases 5-11 are still planned. The numbers are in `docs/results.md`.
+**Phases 0-5 are done and merged** (PRs #1-#8). 700 tests pass. Phases 6-11 are still planned. The numbers are in `docs/results.md`.
 
 | Phase | Result |
 |---|---|
@@ -17,6 +17,7 @@ A from-scratch RAG engine over a real codebase and its docs. Retrieval, indexing
 | 2 | Four chunkers; `structure-300` chosen (0.88 of gold spans intact, 3,267 chunks); ADR 0001 |
 | 3 | BM25 from scratch: MRR 0.660, hit@10 0.800, p95 4.1 ms; ADR 0002 |
 | 4 | Dense retrieval (`bge-small`, flat index): MRR 0.711, hit@10 0.925, p50 112 ms; ADR 0003; 16 classified failures |
+| 5 | k-means, IVF and HNSW from scratch; on a synthetic 100,000-vector set HNSW needs 560 distances for recall 0.99 (flat: 100,000); the real corpus keeps the flat index; ADR 0004 |
 
 ### What changed from the plan below, and what the data says about the next phases
 

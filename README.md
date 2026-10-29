@@ -1,10 +1,10 @@
 # Cairn
 
-A from-scratch RAG engine over the [FastAPI](https://github.com/fastapi/fastapi) docs and source code (pinned to tag 0.143.0). Chunking, BM25, dense retrieval, the vector index and the evaluation harness are written by hand: no LangChain, LlamaIndex, FAISS, Chroma or `rank_bm25`. The only library doing model work is `sentence-transformers`, which runs the embedding model.
+A from-scratch RAG engine over the [FastAPI](https://github.com/fastapi/fastapi) docs and source code (pinned to tag 0.143.0). Chunking, BM25, dense retrieval, the vector indexes (flat, IVF, HNSW) and the evaluation harness are written by hand: no LangChain, LlamaIndex, FAISS, Chroma or `rank_bm25`. The only library doing model work is `sentence-transformers`, which runs the embedding model.
 
 The point of the project is to understand every layer and to measure each choice, so every number below traces to a row in [`docs/results.md`](docs/results.md).
 
-**Status: Phases 0-4 of 11 are done.** Retrieval works and is measured. Generation, the agent loop, serving and the demo are not built yet (see [Roadmap](#roadmap)).
+**Status: Phases 0-5 of 11 are done.** Retrieval works and is measured. Generation, the agent loop, serving and the demo are not built yet (see [Roadmap](#roadmap)).
 
 ## Results so far
 
@@ -25,6 +25,8 @@ What the measurements say:
 - **Chunking mattered most.** Structure-aware chunking (Markdown headings plus a Python AST chunker) keeps 0.88 of the answers whole in 133-token chunks, against 0.78 for fixed 400-token chunks. With dense retrieval it scores MRR 0.711 against 0.43 to 0.46 for the size-based chunkers.
 - **Small implementation details were worth a lot.** Splitting `snake_case` and `camelCase` identifiers lifted BM25 MRR from 0.552 to 0.660. Dropping bge's query prefix cost dense retrieval 0.106 MRR. Turning off BM25's length normalisation halves its score.
 - **Dense search is about 40 times slower** than BM25 per query, and almost all of it is the model embedding the question on a CPU: the scan over the 3,267 vectors takes 0.9 ms.
+
+- **Approximate indexes (Phase 5).** IVF and HNSW, written from scratch, are measured against the exact flat index on a **synthetic** 100,000-vector set (mixes of real chunk vectors plus noise). To reach recall 0.99, HNSW computes 560 distances per query against 100,000 for flat, and is about 3 to 5 times faster in time (the walk is a Python loop); it takes 482 s to build against 31 s for IVF. The neighbour-selection heuristic is the biggest single factor (recall 0.993 against 0.913 at the same search width). On the real 3,267-chunk corpus neither index helps: a flat scan takes 0.36 ms, so the flat index stays.
 
 Failures are analysed one by one in [`eval/failures/phase4.md`](eval/failures/phase4.md) (16 dense failures, classified by cause).
 
@@ -91,7 +93,7 @@ docs/           results.md (every number), adr/ (decisions), notes/ (what I lear
 PLAN.md         the full 11-phase plan and its status
 ```
 
-Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md).
+Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md).
 
 ## Roadmap
 
@@ -102,8 +104,8 @@ Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM
 | 2 | Ingestion and chunking (4 chunkers, gold-integrity metric) | done |
 | 3 | BM25 from scratch | done |
 | 4 | Dense retrieval: embedder, cache, flat index | done |
-| 5 | Approximate nearest-neighbour indexes (k-means, IVF, HNSW) from scratch | next |
-| 6 | Hybrid retrieval (rank fusion) and cross-encoder reranking; first run of the test split | planned |
+| 5 | Approximate nearest-neighbour indexes (k-means, IVF, HNSW) from scratch | done |
+| 6 | Hybrid retrieval (rank fusion) and cross-encoder reranking; first run of the test split | next |
 | 7 | Generation with citations and abstention, LLM client, generation eval | planned |
 | 8 | Agent loop with tools | planned |
 | 9 | FastAPI service: streaming, incremental indexing, caching, rate limiting, load test | planned |
