@@ -1,10 +1,10 @@
 # Cairn
 
-A from-scratch RAG engine over the [FastAPI](https://github.com/fastapi/fastapi) docs and source code (pinned to tag 0.143.0). Chunking, BM25, dense retrieval, the vector indexes (flat, IVF, HNSW) and the evaluation harness are written by hand: no LangChain, LlamaIndex, FAISS, Chroma or `rank_bm25`. The only library doing model work is `sentence-transformers`, which runs the embedding model.
+A from-scratch RAG engine over the [FastAPI](https://github.com/fastapi/fastapi) docs and source code (pinned to tag 0.143.0). Chunking, BM25, dense retrieval, the vector indexes (flat, IVF, HNSW), rank fusion, the reranking wrapper and the evaluation harness are written by hand: no LangChain, LlamaIndex, FAISS, Chroma or `rank_bm25`. The only library doing model work is `sentence-transformers`, which runs the embedding model and the reranking cross-encoder.
 
 The point of the project is to understand every layer and to measure each choice, so every number below traces to a row in [`docs/results.md`](docs/results.md).
 
-**Status: Phases 0-5 of 11 are done.** Retrieval works and is measured. Generation, the agent loop, serving and the demo are not built yet (see [Roadmap](#roadmap)).
+**Status: Phases 0-6 of 11 are done.** Retrieval works and is measured. Generation, the agent loop, serving and the demo are not built yet (see [Roadmap](#roadmap)).
 
 ## Results so far
 
@@ -28,11 +28,28 @@ What the measurements say:
 
 - **Approximate indexes (Phase 5).** IVF and HNSW, written from scratch, are measured against the exact flat index on a **synthetic** 100,000-vector set (mixes of real chunk vectors plus noise). To reach recall 0.99, HNSW computes 560 distances per query against 100,000 for flat, and is about 3 to 5 times faster in time (the walk is a Python loop); it takes 482 s to build against 31 s for IVF. The neighbour-selection heuristic is the biggest single factor (recall 0.993 against 0.913 at the same search width). On the real 3,267-chunk corpus neither index helps: a flat scan takes 0.36 ms, so the flat index stays.
 
-Failures are analysed one by one in [`eval/failures/phase4.md`](eval/failures/phase4.md) (16 dense failures, classified by cause).
+### Hybrid retrieval and reranking (Phase 6), dev and test
+
+The 20 test questions were run once, for the whole table, after the configuration and a prediction were committed. One test question is 0.05.
+
+| Row | dev hit@1 | dev hit@10 | dev MRR | test hit@1 | test hit@10 | test MRR | p50 |
+|---|---|---|---|---|---|---|---|
+| BM25 | 0.600 | 0.800 | 0.660 | 0.350 | 0.700 | 0.452 | about 5 ms |
+| Dense (`bge-small`) | 0.600 | 0.925 | 0.711 | 0.550 | 0.900 | 0.659 | 20 to 44 ms |
+| Hybrid, min-max fusion (**the chosen configuration**) | 0.700 | 0.925 | 0.766 | 0.350 | 0.900 | 0.533 | 23 to 50 ms |
+| Hybrid RRF + cross-encoder rerank (depth 30) | 0.725 | 0.900 | 0.789 | 0.500 | 0.800 | 0.607 | about 3 s |
+
+- **Raw scores cannot be added.** BM25's best score has a median of 30.4 and dense's 0.789, so a raw sum is BM25 with dense as a tie-breaker (MRR 0.672 against 0.660). Fusion works once each list is put on one scale (min-max) or only ranks are used (RRF).
+- **On dev, fusion over dense is not shown to be real.** Min-max has MRR 0.766 against 0.711, but it is better on 9 questions and worse on 9 (95% interval of the difference: -0.046 to +0.160).
+- **On test it did not hold.** Dense alone was the best row without a reranker (MRR 0.659 against 0.533 for min-max). The configuration was kept as decided before the run, because choosing dense after seeing the test split would end its use as a measurement.
+- **A reranker costs about 3 s per question** (0.7 to 1.2 s at depth 10) against about 50 ms for the whole first stage. It moved the top rank and semantic questions on dev, did not raise hit@10, and lowered code questions on both splits. The cause for code is not established.
+- Small-to-big expansion added 0.030 of gold-line coverage for 2.1 times the tokens.
+
+Failures are analysed one by one in [`eval/failures/phase4.md`](eval/failures/phase4.md) (16 dense failures, classified by cause) and [`eval/failures/phase6.md`](eval/failures/phase6.md) (11 failures of hybrid + rerank).
 
 ## How it is evaluated
 
-- **60 questions** about FastAPI in four categories (lexical, semantic, multi-chunk, code lookup), 15 each, split into 40 dev and 20 test questions. The test split is frozen: it will be run twice in the whole project (after Phase 6 and at the end) and `run_eval.py` refuses it without `--use-test-set`. All tuning is done on the dev questions.
+- **60 questions** about FastAPI in four categories (lexical, semantic, multi-chunk, code lookup), 15 each, split into 40 dev and 20 test questions. The test split is frozen: it is run twice in the whole project (once after Phase 6, done; once at the end) and `run_eval.py` and `ablate_hybrid.py` refuse it without `--use-test-set`. All tuning is done on the dev questions.
 - **Gold answers are file and line ranges, not chunk IDs**, so they survive any change of chunking. A retrieved chunk is a hit if its lines overlap a gold range.
 - **The questions were drafted with AI assistance** from passages chosen with a helper script. Gold spans are checked by tests, and `scripts/question_overlap.py` reports how many of a question's words also appear in its answer passage, per category. Questions written after reading a passage tend to echo it somewhat, and 60 questions is a small set.
 - **Metrics:** hit@k, recall@k, MRR and nDCG@k, plus latency p50 and p95. Two baselines (random, first-N) and an oracle check that the harness can tell good from bad.
@@ -55,7 +72,7 @@ Failures are analysed one by one in [`eval/failures/phase4.md`](eval/failures/ph
                                       evaluation harness: metrics, baselines, reports
 ```
 
-Every retriever has the same interface (`search(query, k) -> list[Hit]`), so the harness scores any of them the same way.
+Every retriever has the same interface (`search(query, k) -> list[Hit]`), so the harness scores any of them the same way. The hybrid retriever (fusion of BM25 and dense) and the reranking wrapper take retrievers and have the same interface, so they stack: `RerankingRetriever(HybridRetriever([bm25, dense]), reranker)`. The context expander is applied to the hits afterwards.
 
 ## Reproduce the numbers
 
@@ -72,19 +89,25 @@ python scripts/embed_chunks.py        # dense index (about 8 minutes on a laptop
 python scripts/run_eval.py --retriever bm25
 python scripts/run_eval.py --retriever dense
 python scripts/compare_retrievers.py  # where BM25 and dense disagree, question by question
+
+python scripts/ablate_hybrid.py --by-category   # Phase 6 table (downloads the ~90 MB reranker model the first time)
+python scripts/ablate_hybrid.py --sweep         # RRF constant and fusion weight, dev only
+python scripts/ablate_hybrid.py --expansion     # small-to-big expansion
+python scripts/list_failures.py --rerank --focus rrf+rerank   # where the gold passage ranks, per question
 ```
 
-Tests and lint: `pytest -q` (602 tests, no network or model download needed: the dense tests use a small offline stand-in model) and `ruff check .`.
+Tests and lint: `pytest -q` (825 tests, 1 skipped, no network or model download needed: the dense and reranking tests use small offline stand-in models) and `ruff check .`.
 
-The ablation scripts behind the tables in `docs/results.md` are `scripts/compare_chunkers.py`, `scripts/ablate_bm25.py`, `scripts/ablate_dense.py`, `scripts/bench_search.py` and `scripts/bench_embed.py`.
+The ablation scripts behind the tables in `docs/results.md` are `scripts/compare_chunkers.py`, `scripts/ablate_bm25.py`, `scripts/ablate_dense.py`, `scripts/bench_search.py`, `scripts/bench_embed.py`, `scripts/eval_ann.py` and `scripts/ablate_hybrid.py`. A few Phase 6 numbers (rerank depth, the time breakdown, truncation, the paired statistics) come from one-off scripts that are not in the repository; `docs/results.md` says which.
 
 ## Repository layout
 
 ```
 src/cairn/
   ingest/       documents, chunkers, pipeline
-  retrieval/    tokenizer, inverted index, BM25
+  retrieval/    tokenizer, inverted index, BM25, fusion, hybrid retriever, reranker, context expander
   dense/        embedder, embedding cache, flat index, dense retriever, model registry
+  ann/          k-means, IVF and HNSW indexes
   evaluation/   metrics, questions, baselines, harness, chunk-integrity metric
 scripts/        one runnable script per task (ingest, build_index, embed_chunks, run_eval, ablations)
 eval/           questions.jsonl (data only) and failures/ (failure analyses)
@@ -93,7 +116,7 @@ docs/           results.md (every number), adr/ (decisions), notes/ (what I lear
 PLAN.md         the full 11-phase plan and its status
 ```
 
-Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md).
+Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md).
 
 ## Roadmap
 
@@ -105,8 +128,8 @@ Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM
 | 3 | BM25 from scratch | done |
 | 4 | Dense retrieval: embedder, cache, flat index | done |
 | 5 | Approximate nearest-neighbour indexes (k-means, IVF, HNSW) from scratch | done |
-| 6 | Hybrid retrieval (rank fusion) and cross-encoder reranking; first run of the test split | next |
-| 7 | Generation with citations and abstention, LLM client, generation eval | planned |
+| 6 | Hybrid retrieval (rank fusion), cross-encoder reranking, small-to-big expansion; first run of the test split | done |
+| 7 | Generation with citations and abstention, LLM client, generation eval | next |
 | 8 | Agent loop with tools | planned |
 | 9 | FastAPI service: streaming, incremental indexing, caching, rate limiting, load test | planned |
 | 10 | Frontend, Docker, CI with a retrieval-regression gate, deployment | planned |

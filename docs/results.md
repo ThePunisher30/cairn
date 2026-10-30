@@ -431,7 +431,7 @@ For the 3,267 chunks of the real corpus the flat index stays: it is exact and as
 
 Everything below uses the 3,267 chunks, `bge-small` for the dense retriever, `cross-encoder/ms-marco-MiniLM-L-6-v2` for the reranker, k = 10 and the 40 dev questions unless it says otherwise. On the dev split one question is 0.025. The accuracy columns are deterministic; latencies vary between runs of the same setting, sometimes by 50% or more, so only their order of magnitude is meaningful.
 
-Added in this phase: `fusion.py` (RRF, min-max and z-score normalisation, weighted fusion), `hybrid.py` (`HybridRetriever`), `rerank.py` (`Reranker` with a cache and batching, `RerankingRetriever`) and `context.py` (`ContextExpander`). The runs come from `scripts/ablate_hybrid.py` and `scripts/list_failures.py`; the depth, timing and statistics runs were one-off scripts, and their raw output is not in the repository.
+Added in this phase: `fusion.py` (RRF, min-max and z-score normalisation, weighted fusion), `hybrid.py` (`HybridRetriever`), `rerank.py` (`Reranker` with a cache and batching, `RerankingRetriever`) and `context.py` (`ContextExpander`). The runs come from `scripts/ablate_hybrid.py` and `scripts/list_failures.py`; the score-range, depth, timing, truncation and statistics runs were one-off scripts, and their raw output is not in the repository.
 
 ### Labels
 
