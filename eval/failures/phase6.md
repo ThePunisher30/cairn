@@ -36,6 +36,10 @@ Causes use the Phase 4 words where they fit: **wrong chunk, right page**, **wron
 3. **The reranker took rank 1 away from four questions RRF had right:** q004, q037, q049, q055. In each, the passage it preferred is related to the gold: a chunk with the same sentence (q004), a sibling (q037), the introduction of the same page (q049), the adjacent section (q055). Four examples, so this is a pattern to test, not a result. RRF has rank 1 on 26 questions and the reranker on 29, so the net is +3.
 4. **Three labels have a second passage that answers the question** (q004, q043, q044). All three have the answer in the first result of some row. If any label is changed, every row's baseline changes and has to be re-run (the rule of Step 0). I have not changed any label.
 
+## Decision on the three label candidates
+
+q004, q043 and q044 are kept unchanged, so no baseline is re-run. This leaves a known limit: for these three the first result of some row also answers the question, so hit@1 on the dev set understates every retriever by up to three questions (0.075). The Phase 6 write-up says so next to the numbers.
+
 ## Not confirmed
 
 - Why the model preferred each first result. I read the passages and the scores; I did not test any explanation.
