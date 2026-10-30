@@ -6,9 +6,9 @@ A from-scratch RAG engine over a real codebase and its docs. Retrieval, indexing
 
 ---
 
-## Status (updated after Phase 4)
+## Status (updated after Phase 6)
 
-**Phases 0-4 are done and merged** (PRs #1-#6). 602 tests pass. Phases 5-11 are still planned. The numbers are in `docs/results.md`.
+**Phases 0-6 are done** (PRs #1-#8 merged, and the Phase 6 pull request). 825 tests pass (1 skipped). Phases 7-11 are still planned. The numbers are in `docs/results.md`.
 
 | Phase | Result |
 |---|---|
@@ -17,6 +17,8 @@ A from-scratch RAG engine over a real codebase and its docs. Retrieval, indexing
 | 2 | Four chunkers; `structure-300` chosen (0.88 of gold spans intact, 3,267 chunks); ADR 0001 |
 | 3 | BM25 from scratch: MRR 0.660, hit@10 0.800, p95 4.1 ms; ADR 0002 |
 | 4 | Dense retrieval (`bge-small`, flat index): MRR 0.711, hit@10 0.925, p50 112 ms; ADR 0003; 16 classified failures |
+| 5 | k-means, IVF and HNSW from scratch; on a synthetic 100,000-vector set HNSW needs 560 distances for recall 0.99 (flat: 100,000); the real corpus keeps the flat index; ADR 0004 |
+| 6 | Fusion (RRF, min-max, z-score), cross-encoder reranking and small-to-big expansion. Dev: min-max MRR 0.766 against dense 0.711 (not shown to be real: better on 9 questions, worse on 9); a reranker adds the top rank and semantic questions at about 3 s per question and lowers code. **Test run 1:** dense alone (MRR 0.659) beat the chosen min-max (0.533); the configuration was kept as decided; ADR 0005 |
 
 ### What changed from the plan below, and what the data says about the next phases
 
@@ -27,7 +29,8 @@ A from-scratch RAG engine over a real codebase and its docs. Retrieval, indexing
 - **Embedding cache key:** it is `sha256(model name + document prefix + text the model saw)`, not `(content_hash, model_name)`: `content_hash` covers only a chunk's text, not its heading, the model or the prefix (ADR 0003).
 - **Second embedding model:** `all-MiniLM-L6-v2`, which is clearly worse (MRR 0.492).
 - **Phase 5 note:** the flat index is only 5.0 MB for this corpus and scans in 0.9 ms, while embedding the question takes 38.5 ms alone (measured separately; the eval's p50 of 112 ms is higher and unexplained), so ANN cannot fix the per-query latency at this size. Measure the scan time and the embedding time separately in `bench/ann.py`. The plan below still stands: use the flat index as the exact answer, and a larger scale set so ANN has something to prove.
-- **Phase 6 note:** the case for fusion is measured: at rank 1 each retriever alone gets 0.600, and at least one of them gets 0.775. Nine dev questions fail in both, so fusion cannot fix them. Before the first test-split run, check the two debatable labels (q005, q007) in `eval/failures/phase4.md`.
+- **Phase 6 note:** the case for fusion was measured before the phase (at rank 1 each retriever alone gets 0.600, and at least one of them gets 0.775), but the dev advantage of fusion over dense was not statistically established and did not reproduce on the test split. The first of the two test runs is used (`eval/test_set_runs.log`); one is left for Phase 11. Five dev labels have a second passage that also answers the question and were kept (`eval/failures/phase6.md`).
+- **Phase 7 note:** ADR 0005 makes hybrid min-max the default retriever. Because dense alone did better on test, the generation evaluation on the dev questions should also report dense alone, so the retriever choice can be revisited on dev evidence and never on the test split. A reranker costs about 3 s per question and is off by default.
 - **Open questions from Phase 4**, not investigated: why the query prefix matters only for `structure-300`; whether the 83 chunks over the model's 512-token limit cost anything on the dev questions; why a first embedding run was slower than the benchmark predicted.
 
 ---
@@ -245,7 +248,7 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 
 ---
 
-### Phase 5: ANN indexes from scratch (7–10 days, the hardest phase) — NEXT
+### Phase 5: ANN indexes from scratch (7–10 days, the hardest phase) — DONE
 **Goal:** understand why vector databases exist by building the index inside them.
 
 **You write**
@@ -265,7 +268,7 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 
 ---
 
-### Phase 6: Hybrid retrieval and reranking (5–6 days)
+### Phase 6: Hybrid retrieval and reranking (5–6 days) — DONE
 **Goal:** combine retrievers and measure what each addition actually buys.
 
 **You write**
@@ -284,7 +287,7 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 
 ---
 
-### Phase 7: Generation (6–8 days)
+### Phase 7: Generation (6–8 days) — NEXT
 **Goal:** turn retrieved context into grounded, cited, abstaining answers.
 
 **You write**

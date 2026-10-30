@@ -426,3 +426,307 @@ Command: `python scripts/eval_ann.py` (dev split only).
 | HNSW heuristic | on | recall 0.993 against 0.913 at `ef` 80 |
 
 For the 3,267 chunks of the real corpus the flat index stays: it is exact and as fast. ANN is a decision about a much larger corpus (see `docs/adr/0004-ann-indexes.md`).
+
+## Phase 6: hybrid retrieval, reranking, small-to-big expansion
+
+Everything below uses the 3,267 chunks, `bge-small` for the dense retriever, `cross-encoder/ms-marco-MiniLM-L-6-v2` for the reranker, k = 10 and the 40 dev questions unless it says otherwise. On the dev split one question is 0.025. The accuracy columns are deterministic; latencies vary between runs of the same setting, sometimes by 50% or more, so only their order of magnitude is meaningful.
+
+Added in this phase: `fusion.py` (RRF, min-max and z-score normalisation, weighted fusion), `hybrid.py` (`HybridRetriever`), `rerank.py` (`Reranker` with a cache and batching, `RerankingRetriever`) and `context.py` (`ContextExpander`). The runs come from `scripts/ablate_hybrid.py` and `scripts/list_failures.py`; the score-range, depth, timing, truncation and statistics runs were one-off scripts, and their raw output is not in the repository.
+
+### Labels
+
+Before any Phase 6 number was measured, q005 and q007 were re-read (Step 0): the chunk dense ranked first also answers each question. Both labels were kept. The failure analysis later found three more, q004, q043 and q044, and they were kept too (`eval/failures/phase6.md`). For these five questions the first result of some row also answers the question, so dev hit@1 understates the rows that rank the other passage first, by up to 0.125. No baseline was re-run.
+
+### The ablation table on dev
+
+| retriever | hit@1 | hit@5 | hit@10 | MRR | nDCG@10 | p50 ms |
+|---|---|---|---|---|---|---|
+| bm25 | 0.600 | 0.750 | 0.800 | 0.660 | 0.658 | 2.6 |
+| dense | 0.600 | 0.825 | 0.925 | 0.711 | 0.723 | 19.9 |
+| hybrid rrf (k=60) | 0.650 | 0.800 | 0.900 | 0.732 | 0.739 | 21.9 |
+| hybrid weighted min-max (w=0.5) | 0.700 | 0.850 | 0.925 | 0.766 | 0.769 | 22.6 |
+| hybrid weighted z-score (w=0.5) | 0.650 | 0.850 | 0.925 | 0.750 | 0.753 | 23.1 |
+| hybrid raw sum (w=0.5) | 0.600 | 0.800 | 0.800 | 0.672 | 0.668 | 22.2 |
+| bm25 + rerank | 0.700 | 0.825 | 0.850 | 0.758 | 0.744 | 3,417 |
+| dense + rerank | 0.700 | 0.850 | 0.875 | 0.763 | 0.765 | 4,782 |
+| hybrid rrf + rerank | 0.725 | 0.875 | 0.900 | 0.789 | 0.789 | 3,173 |
+
+Command: `python scripts/ablate_hybrid.py --by-category` (fetch depth 50, rerank depth 30). The reranked rows scored between 2.9 and 4.8 s in two runs of the same setting.
+
+MRR by category:
+
+| retriever | lexical | semantic | multi_chunk | code |
+|---|---|---|---|---|
+| bm25 | 1.000 | 0.432 | 0.658 | 0.550 |
+| dense | 0.817 | 0.724 | 0.700 | 0.602 |
+| hybrid rrf | 0.950 | 0.667 | 0.695 | 0.617 |
+| hybrid min-max | 0.950 | 0.775 | 0.717 | 0.624 |
+| hybrid z-score | 0.950 | 0.700 | 0.725 | 0.625 |
+| hybrid raw sum | 1.000 | 0.462 | 0.675 | 0.550 |
+| bm25 + rerank | 0.950 | 0.800 | 0.733 | 0.548 |
+| dense + rerank | 0.950 | 0.750 | 0.803 | 0.548 |
+| hybrid rrf + rerank | 0.950 | 0.850 | 0.808 | 0.548 |
+
+### 1. Why not add the raw scores?
+
+The score ranges over the 40 dev questions (top 50 of each retriever):
+
+| | top-1 score: min / median / max | top-1 minus 50th, median |
+|---|---|---|
+| BM25 | 16.0 / 30.4 / 66.0 | 15.4 |
+| dense | 0.678 / 0.789 / 0.875 | 0.115 |
+
+1. **The scales differ by about 130 times,** and BM25's own scale varies by a factor of four between questions. Added raw, dense moves a chunk's score by about 0.1 and BM25 by about 15.
+2. **The raw-sum row is BM25 with dense as a tie-breaker.** MRR 0.672 against 0.660 for BM25, lexical MRR 1.000 (BM25's), hit@10 exactly 0.800 (BM25's). In 13 of 40 questions its top 10 is identical to BM25's. Dense only reorders near-ties: BM25's ranks 2 to 5 on q001 are 31.7, 31.3, 31.2 and 31.1, while dense's gaps are 0.003 to 0.03.
+3. **A chunk only dense finds cannot reach the top 10.** Its raw-sum score is below 1 and BM25's 50th result typically scores about 15. This is an argument from the measured ranges, not a direct check.
+4. **q016 shows it on one question.** Dense has the gold at rank 1 (`path-params.md:111-129`). The raw sum returns BM25's favourite (`dependencies/index.md:206-238`, not the gold); min-max returns the gold.
+
+### 2. RRF constant and fusion weight
+
+| RRF k | MRR | hit@5 |
+|---|---|---|
+| 1 | 0.761 | 0.850 |
+| 10 | 0.748 | 0.850 |
+| 30 | 0.735 | 0.850 |
+| 60 | 0.732 | 0.800 |
+| 100 | 0.732 | 0.800 |
+| 1000 | 0.732 | 0.800 |
+
+| dense weight (min-max) | MRR | hit@5 |
+|---|---|---|
+| 0.0 (BM25 alone) | 0.660 | 0.750 |
+| 0.25 | 0.705 | 0.800 |
+| 0.5 | 0.766 | 0.850 |
+| 0.75 | 0.752 | 0.850 |
+| 1.0 (dense alone) | 0.711 | 0.825 |
+
+Command: `python scripts/ablate_hybrid.py --sweep`.
+
+1. **The ends of the weight sweep reproduce the single retrievers exactly** (0.660 and 0.711), a check that the fusion code does what it should.
+2. **Within 0.05 of the best weighted cell (0.766):** the weights 0.5 and 0.75. The weights 0.25 and 1.0 are 0.061 and 0.055 below it. Every RRF constant is within 0.05 of the best RRF cell; from 60 to 1000 the ranking no longer changes (identical numbers).
+3. **A smaller RRF constant is better on dev** (0.761 at k = 1 against 0.732 at the default 60): it rewards top ranks more.
+4. **What picking the highest cell costs.** With 5 weights and 6 constants compared on the same 40 questions, the best cell is partly luck, and the differences among the top cells are one question. I kept the round default (w = 0.5) instead of searching for a finer weight. The test split later showed larger dev-to-test gaps for the fused rows than for dense; the gaps have more than one possible cause (see the test section).
+
+### 3. Fusion against the single retrievers, per category
+
+1. **BM25 wins lexical questions and dense wins semantic ones,** as in Phase 4 (lexical 1.000 against 0.817; semantic 0.432 against 0.724).
+2. **Min-max is at or above dense in every category on dev** (lexical 0.950 against 0.817, semantic 0.775 against 0.724, multi_chunk 0.717 against 0.700, code 0.624 against 0.602) and below BM25 on lexical (0.950 against 1.000).
+3. **RRF at k = 60 hurts semantic questions:** 0.667 against 0.724 for dense. BM25's wrong answers pull the fused ranking down there.
+4. **Raw sum equals BM25 in every category** to within 0.03 (see item 1 above).
+5. The per-category rows hold a handful of questions each; a category MRR can move by 0.1 on one question.
+
+### 4. Reranking
+
+1. **Largest gain:** BM25 + rerank, MRR 0.660 to 0.758 (+0.098). Dense gains 0.052 and RRF 0.057.
+2. **By category:** semantic questions gain most (BM25 0.432 to 0.800, hybrid RRF 0.667 to 0.850), multi_chunk gains for dense and RRF (0.700 to 0.803, 0.695 to 0.808), lexical gains for dense (0.817 to 0.950).
+3. **Code gets worse or stays flat:** 0.548 in all three reranked rows against 0.550, 0.602 and 0.617 before.
+4. **It moves the top rank, not the recall:** for hybrid RRF, hit@1 goes from 26 questions to 29 and hit@10 from 36 to 36; dense + rerank has hit@10 0.875 against 0.925 without, two questions pushed out of the top 10.
+5. **Why code does not gain** (from reading the chunks, `eval/failures/phase6.md`): 4 of the 5 code questions lose to a tutorial page, and in two examples the gold code chunk gets a negative reranker score (-2.43 and -1.18) while the docs page gets 6.39 and 4.06. Two examples do not show that the model reads code badly; that explanation is not tested.
+6. **The code MRR is identical (0.548) in the three rows for an arithmetic reason, not a bug.** Seven of the 10 code questions get the same rank in all three rows (and q044 is missing from all three); questions ranked beyond 10 add nothing to MRR at k = 10; the rest sum to 5 x 1 + 1/3 + 1/7 = 5.476 over 10 questions. The reranker scores each (question, passage) pair on its own, so the first stage only decides which golds are in the pool.
+7. **Three questions end at exactly rank 16** (q026, q031, q041; RRF ranks 26, 29, 20). The scores are distinct and close to their neighbours, so it is a coincidence, not a cap or a tie.
+
+### 5. How deep the reranker should look
+
+Ceiling: hit@k of the first stage alone.
+
+| k | hybrid rrf | hybrid min-max |
+|---|---|---|
+| 10 | 0.900 | 0.925 |
+| 20 | 0.925 | 0.950 |
+| 30 | 0.975 | 0.950 |
+| 50 | 0.975 | 0.975 |
+
+hybrid RRF + rerank by depth (final k = 10; latency from the first 10 questions with an empty cache):
+
+| depth | hit@1 | hit@5 | hit@10 | MRR | p50 ms |
+|---|---|---|---|---|---|
+| 10 | 0.750 | 0.900 | 0.900 | 0.806 | 1,236 |
+| 20 | 0.725 | 0.875 | 0.900 | 0.792 | 2,405 |
+| 30 | 0.725 | 0.875 | 0.900 | 0.789 | 3,200 |
+| 50 | 0.725 | 0.875 | 0.900 | 0.787 | 4,881 |
+
+1. **The ceiling for a pool of 30 is 0.975** (39 of 40); the question never found is q044.
+2. **A deeper pool did not help on dev.** Depth 10 is the best on every column, by one question at hit@1 and at hit@5, which is inside the noise. The supported claim is that going beyond 10 candidates bought nothing measurable and cost two to four times the time.
+3. **hit@10 stays at 0.900 although the ceiling rises from 0.900 to 0.975:** the three golds that RRF finds at ranks 11 to 30 end at rank 16 after reranking.
+4. **Time is about linear in depth,** roughly 100 to 125 ms per candidate.
+
+### 6. Where the time goes
+
+Median over the first 8 dev questions, after a warm-up call, empty score cache for each rerank call.
+
+| step | ms per question |
+|---|---|
+| BM25 search (k = 50) | 5.2 |
+| embed the question | 42.3 |
+| flat index search (k = 50) | 0.5 |
+| fusion (RRF, in Python) | 0.3 |
+| **first stage in all** | **48** |
+| rerank, depth 10 | 716 to 1,133 |
+| rerank, depth 30 | 3,673 to 3,881 |
+
+1. **The reranker is 94 to 96% of the time at depth 10 and about 99% at depth 30.** The question's embedding is 42 of the 48 ms of the first stage. A (question, passage) pair is 259 tokens on average, and 5% reach the 512 cap. The machine had 12 torch threads.
+2. **The same setting measured three times gave 716, 1,133 and 1,059 ms.** Differences under about 50% are inside that noise.
+3. **Levers, depth 30:** batch size 4, 8, 16, 32 gave 2,779, 3,016, 3,673 and 5,238 ms, the one clear trend (a likely reason is padding to the longest passage in a batch; not tested). Batch 4 was faster than batch 16 in all four comparisons made, by 13 to 25%, and batch size does not change the scores.
+4. **Truncating the passages costs accuracy at 500 characters** (depth 10, dev):
+
+| max_chars | batch | hit@1 | hit@5 | hit@10 | MRR | p50 ms |
+|---|---|---|---|---|---|---|
+| 2000 | 16 | 0.750 | 0.900 | 0.900 | 0.806 | 1,056 |
+| 1000 | 16 | 0.725 | 0.900 | 0.900 | 0.785 | 929 |
+| 500 | 16 | 0.650 | 0.850 | 0.900 | 0.738 | 619 |
+| 1000 | 4 | 0.725 | 0.900 | 0.900 | 0.785 | 760 |
+| 500 | 4 | 0.650 | 0.850 | 0.900 | 0.738 | 463 |
+
+At 500 characters the model loses four questions at hit@1; at 1000 it loses one, which is inside the noise. The first rows of this table were timed while another job used the CPU, so their latencies are less reliable than the accuracy.
+5. **Under 300 ms was not reached** by anything measured. The fastest row (463 ms) costs four questions at hit@1. Untested ideas: a smaller cross-encoder, and reranking only when the first stage is unsure.
+
+### 7. Small-to-big expansion
+
+Top 5 contexts of hybrid RRF + rerank, dev:
+
+| | hit@5 | gold lines covered | mean tokens |
+|---|---|---|---|
+| chunks as retrieved | 0.875 | 0.802 | 1,351 |
+| section, up to 400 | 0.875 | 0.807 | 1,415 |
+| section, up to 800 | 0.875 | 0.807 | 1,481 |
+| section, up to 1600 | 0.875 | 0.807 | 1,496 |
+| parent, up to 400 | 0.875 | 0.807 | 1,745 |
+| parent, up to 800 | 0.900 | 0.832 | 2,889 |
+| parent, up to 1600 | 0.900 | 0.841 | 4,002 |
+
+Command: `python scripts/ablate_hybrid.py --expansion`.
+
+1. **`section` mode adds nothing** (coverage 0.802 to 0.807).
+2. **`parent` at 800 tokens covers 0.030 more of the gold lines for 2.1 times the tokens,** and gains one question at hit@5. At 1600 tokens it covers 0.841 for three times the tokens.
+3. **16 to 20% of the gold lines are still not covered** after expansion (20% without it), so most of what the first stage misses is not recovered by widening the chunk.
+4. **Expanded hit@5 is not comparable with the chunk table.** An expanded context spans the lines of many chunks, so a gold nearby is counted although the retriever never ranked it; it measures a bigger window, not a better ranking. The table therefore reports the share of the gold lines contained and the tokens spent.
+
+### 8. What still fails
+
+The 11 questions where hybrid RRF + rerank does not have the gold at rank 1 are classified in `eval/failures/phase6.md`: 3 with a second passage that also answers the question (q004, q043, q044), 3 wrong chunk on the right page, 2 where prose outranks code, 1 sibling code, 1 vocabulary mismatch, 1 wrong chunk on another page. Of the nine questions that neither BM25 nor dense has at rank 1 (the Phase 4 list), hybrid RRF + rerank puts three at rank 1 (q019, q050, q059) and six remain (q026, q031, q041, q043, q044, q058). Five questions have no gold chunk in the top 5 (q026, q031, q041, q043, q044). The reranker also took rank 1 away from four questions RRF had right (q004, q037, q049, q055). In 10 of the 11 the gold is inside the 30 passages the reranker sees; only q044 is in no pool, and its gold file is cut into four chunks of 15 to 53 tokens.
+
+### Summary of the dev results
+
+1. **Fusion needs a common scale.** Raw sums reduce to BM25; min-max, z-score and RRF all beat BM25, and min-max has the best MRR of the fused rows (0.766).
+2. **The dev advantage of fusion over dense is not statistically established:** min-max beats dense on 9 questions and loses on 9 (paired MRR difference +0.056, 95% interval -0.046 to +0.160).
+3. **A reranker moves the top rank and semantic questions, and costs about 3 s per question at depth 30** (0.7 to 1.2 s at depth 10); it does not help hit@10, and it does not help code questions.
+4. **Small-to-big expansion adds little here** for twice the tokens.
+5. The next sections give the configuration chosen from these tables, written before the test run, and the test result.
+
+### Final configuration and prediction (written before the test run)
+
+**Configuration, chosen on the 40 dev questions:** hybrid retrieval of BM25 and dense (`bge-small`), weighted min-max fusion with equal weights (0.5 and 0.5), fetch depth 50 from each, final k = 10. No reranker, no expansion.
+
+**The rule was fixed before the numbers.** The cheap option (min-max, no model) is kept unless the best reranked row beats it, where "beats" means the paired bootstrap 95% interval of the difference in per-question reciprocal rank excludes 0 (10,000 resamples of the 40 questions). Both reranked rows use rerank depth 10.
+
+| row (dev, k = 10) | hit@1 | hit@5 | hit@10 | MRR | p50 ms |
+|---|---|---|---|---|---|
+| bm25 | 0.600 | 0.750 | 0.800 | 0.660 | 5 |
+| dense | 0.600 | 0.825 | 0.925 | 0.711 | 44 |
+| hybrid rrf (k=60) | 0.650 | 0.800 | 0.900 | 0.732 | 54 |
+| hybrid weighted min-max (w=0.5) | 0.700 | 0.850 | 0.925 | 0.766 | 50 |
+| hybrid rrf + rerank (10) | 0.750 | 0.900 | 0.900 | 0.806 | 854 |
+| hybrid min-max + rerank (10) | 0.775 | 0.900 | 0.925 | 0.834 | 1,050 |
+
+| paired difference in MRR | difference | 95% interval | better on / worse on |
+|---|---|---|---|
+| min-max minus dense | +0.056 | -0.046 to +0.160 | 9 / 9 |
+| rrf minus dense | +0.022 | -0.078 to +0.122 | 9 / 10 |
+| min-max minus rrf | +0.034 | +0.006 to +0.074 | 7 / 1 |
+| rrf + rerank minus rrf | +0.074 | -0.027 to +0.179 | 10 / 4 |
+| **min-max + rerank minus min-max** (the rule) | +0.068 | -0.019 to +0.162 | 8 / 3 |
+
+The interval of the rule's comparison includes 0, so the configuration is min-max without a reranker. What the 40 dev questions cannot show: that min-max beats dense (9 questions better, 9 worse), or that reranking helps (8 better, 3 worse, sign test p = 0.23). The one difference whose interval excludes 0 is min-max over RRF (7 better, 1 worse; sign test p = 0.07). Seven comparisons were made on the same questions, so even that one is weak. Latency is noisy: the p50 of min-max was 23 ms in the first table and 50 ms here.
+
+**Prediction for the test split** (20 questions, so one question is 0.05; the test split has not been run):
+
+| min-max row | dev | predicted test (range) |
+|---|---|---|
+| hit@1 | 0.700 | 0.65 (0.50 to 0.80) |
+| hit@5 | 0.850 | 0.80 (0.65 to 0.90) |
+| hit@10 | 0.925 | 0.90 (0.80 to 1.00) |
+| MRR | 0.766 | 0.70 (0.58 to 0.80) |
+
+Basis: the sampling error of a proportion near 0.7 on 20 questions is about 0.10 (square root of 0.7 x 0.3 / 20), which sets the width of the ranges. The 0.05 expected shrink comes from choosing among several methods and weights on the same 40 questions; it is a guess, because no earlier test run exists to calibrate it.
+
+Predictions about the whole table (each can be wrong):
+1. Min-max, dense and BM25 will be within one or two questions of each other on hit@1, so the test run will not separate them.
+2. The raw-sum row will stay close to BM25.
+3. The reranked rows will have a higher hit@1 than the rows they rerank, by one to three questions.
+4. Code questions will be worse with a reranker than without.
+
+### The test split (run once, 2026-10-31)
+
+Command: `python scripts/ablate_hybrid.py --split test --use-test-set --by-category`. 20 test questions, so one question is 0.05. Default settings, the same as the dev table (fetch depth 50, rerank depth 30). This is the first of the two test runs the project allows (`eval/test_set_runs.log`); the second is for Phase 11. Nothing was changed after seeing the table.
+
+| row | hit@1 | hit@5 | hit@10 | MRR | nDCG@10 | p50 ms |
+|---|---|---|---|---|---|---|
+| bm25 | 0.350 | 0.600 | 0.700 | 0.452 | 0.486 | 5.7 |
+| dense | 0.550 | 0.750 | 0.900 | 0.659 | 0.644 | 41.1 |
+| hybrid rrf (k=60) | 0.350 | 0.800 | 0.900 | 0.495 | 0.560 | 45.8 |
+| hybrid weighted min-max (w=0.5), **the chosen configuration** | 0.350 | 0.800 | 0.900 | 0.533 | 0.573 | 50.1 |
+| hybrid weighted z-score (w=0.5) | 0.350 | 0.850 | 0.900 | 0.524 | 0.569 | 46.6 |
+| hybrid raw sum (w=0.5) | 0.350 | 0.600 | 0.750 | 0.458 | 0.501 | 50.1 |
+| bm25 + rerank | 0.500 | 0.650 | 0.700 | 0.575 | 0.551 | 2,893.8 |
+| dense + rerank | 0.500 | 0.750 | 0.850 | 0.615 | 0.622 | 2,574.1 |
+| hybrid rrf + rerank | 0.500 | 0.700 | 0.800 | 0.607 | 0.609 | 3,170.0 |
+
+MRR by category (each category holds only a few of the 20 questions, so these are weak evidence):
+
+| row | lexical | semantic | multi_chunk | code |
+|---|---|---|---|---|
+| bm25 | 0.707 | 0.300 | 0.369 | 0.433 |
+| dense | 0.829 | 0.600 | 0.822 | 0.383 |
+| hybrid rrf | 0.700 | 0.373 | 0.590 | 0.319 |
+| hybrid min-max | 0.700 | 0.440 | 0.667 | 0.325 |
+| hybrid z-score | 0.700 | 0.390 | 0.640 | 0.367 |
+| hybrid raw sum | 0.707 | 0.320 | 0.373 | 0.433 |
+| bm25 + rerank | 1.000 | 0.333 | 0.700 | 0.267 |
+| dense + rerank | 1.000 | 0.533 | 0.720 | 0.207 |
+| hybrid rrf + rerank | 1.000 | 0.529 | 0.700 | 0.200 |
+
+**Dev against test, per row** (the dev numbers are the default dev table: rerank depth 30 for the rerank rows):
+
+| row | hit@1 dev to test | hit@10 dev to test | MRR dev to test | MRR gap |
+|---|---|---|---|---|
+| bm25 | 0.600 to 0.350 | 0.800 to 0.700 | 0.660 to 0.452 | -0.208 |
+| dense | 0.600 to 0.550 | 0.925 to 0.900 | 0.711 to 0.659 | -0.052 |
+| hybrid rrf | 0.650 to 0.350 | 0.900 to 0.900 | 0.732 to 0.495 | -0.237 |
+| hybrid min-max | 0.700 to 0.350 | 0.925 to 0.900 | 0.766 to 0.533 | -0.233 |
+| hybrid z-score | 0.650 to 0.350 | 0.925 to 0.900 | 0.750 to 0.524 | -0.226 |
+| hybrid raw sum | 0.600 to 0.350 | 0.800 to 0.750 | 0.672 to 0.458 | -0.214 |
+| bm25 + rerank | 0.700 to 0.500 | 0.850 to 0.700 | 0.758 to 0.575 | -0.183 |
+| dense + rerank | 0.700 to 0.500 | 0.875 to 0.850 | 0.763 to 0.615 | -0.148 |
+| hybrid rrf + rerank | 0.725 to 0.500 | 0.900 to 0.800 | 0.789 to 0.607 | -0.182 |
+
+**The prediction against the result** (chosen configuration, min-max):
+
+| | predicted test (range) | test |
+|---|---|---|
+| hit@1 | 0.65 (0.50 to 0.80) | **0.350**, below the range |
+| hit@5 | 0.80 (0.65 to 0.90) | 0.800 |
+| hit@10 | 0.90 (0.80 to 1.00) | 0.900 |
+| MRR | 0.70 (0.58 to 0.80) | **0.533**, below the range |
+
+Predictions about the whole table:
+1. *Min-max, dense and BM25 within one or two questions of each other at hit@1:* **wrong.** Dense has 11 of 20 and min-max and BM25 have 7 each.
+2. *Raw sum stays close to BM25:* **right.** hit@1 0.350 for both, MRR 0.458 against 0.452.
+3. *Reranked rows higher at hit@1 than the rows they rerank, by one to three questions:* **right for two of three.** BM25 and RRF gain three questions; dense + rerank is one question below dense.
+4. *Code questions worse with a reranker:* **right in all three rows** (0.267, 0.207 and 0.200 with a reranker; 0.433, 0.383 and 0.319 without).
+
+**What the test table supports**
+
+1. **The order of the rows did not survive.** On dev the fused rows were above dense (MRR 0.732 to 0.766 against 0.711). On test dense is the best row without a reranker (MRR 0.659 against 0.533 for min-max) and the best row at hit@1 (0.550, against 0.500 for the reranked rows).
+2. **Every row dropped, dense the least.** The MRR gap is -0.052 for dense and between -0.226 and -0.237 for the three fused rows. The fused rows are the rows whose method was chosen on dev (the fusion method and the normalisation, with `k` and the weight looked at in the sweep). BM25 also dropped by -0.208, so tuning on dev is not the only explanation; with 20 questions I cannot separate it from a test split that is harder or just a different draw. I did not measure how much each row was tuned.
+3. **For the fused rows, retrieval held and the ordering did not.** Min-max reached hit@5 0.800 and hit@10 0.900, as predicted, but hit@1 fell from 0.700 to 0.350: the gold is usually in the first five and rarely first. Dense has hit@5 0.750.
+4. **The reranker helped BM25 and RRF at hit@1 (three questions each) and did not beat dense alone** (MRR 0.615 for dense + rerank against 0.659 for dense). At hit@10 the reranker helped no row: BM25 is unchanged (0.700), dense is lower (0.900 to 0.850) and RRF is lower (0.900 to 0.800). Dense's hit@10 also fell with a reranker on dev (0.925 to 0.875).
+5. **The reranker lowers code questions in both splits.** Code MRR with a reranker is 0.548 on dev (against 0.550 to 0.625 without) and 0.200 to 0.267 on test (against 0.319 to 0.433 without). The test difference is the larger of the two.
+6. **Reranking costs about 3 s per question** on this machine (2.6 to 3.2 s at depth 30), against 41 to 50 ms for the rows without a reranker.
+
+**What it does not support**
+
+- 20 questions: a difference of 0.20 is four questions, and the category rows rest on a handful of questions each.
+- No cause is claimed for the fused rows' collapse at hit@1. The test questions were not read one by one, to keep the split a measurement. Any investigation belongs on the dev set.
+- The reranked rows were run at depth 30 as in the dev table, not at the depth 10 the dev analysis preferred. That setting was never run on test.
+
+**Decision.** The configuration stays hybrid weighted min-max without a reranker, as written before the run. Dense alone did better on test, but choosing it now would be choosing on the test split, which would end its use as a measurement. The report states the result as it is. The second and last test run, in Phase 11, measures whatever Phases 7 to 10 produce.
