@@ -46,3 +46,8 @@ What the table says:
 ## Where dense fixed a BM25 failure (not failures)
 
 BM25 ranks the answer below 1 and dense ranks it at 1 for q016, q017, q020, q022, q023, q032 and q053 (7 questions, `semantic` for the first five). q017 is the clearest case: BM25 rank 212, dense rank 1, because (Phase 3) the passage contains `true` but none of the content words of the question. In q053 dense's first chunk (`applications.py:4747-4791`) contains the gold lines 4787-4791 inside a larger chunk, so it counts as a hit.
+
+## Label check before Phase 6 (q005, q007)
+Kept both labels unchanged. I read the gold span and the chunk dense ranked first for each.
+- q005: the gold explains the fix; dense's one-line chunk only names the attack. The gold is the fuller answer, so I kept it.
+- q007: dense's chunk is the argument list, which also answers it, but the gold is the passage the question was written from.
