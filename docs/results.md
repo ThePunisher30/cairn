@@ -426,3 +426,47 @@ Command: `python scripts/eval_ann.py` (dev split only).
 | HNSW heuristic | on | recall 0.993 against 0.913 at `ef` 80 |
 
 For the 3,267 chunks of the real corpus the flat index stays: it is exact and as fast. ANN is a decision about a much larger corpus (see `docs/adr/0004-ann-indexes.md`).
+
+## Phase 6: hybrid retrieval, reranking, small-to-big expansion
+
+### Final configuration and prediction (written before the test run)
+
+**Configuration, chosen on the 40 dev questions:** hybrid retrieval of BM25 and dense (`bge-small`), weighted min-max fusion with equal weights (0.5 and 0.5), fetch depth 50 from each, final k = 10. No reranker, no expansion.
+
+**The rule was fixed before the numbers.** The cheap option (min-max, no model) is kept unless the best reranked row beats it, where "beats" means the paired bootstrap 95% interval of the difference in per-question reciprocal rank excludes 0 (10,000 resamples of the 40 questions). Both reranked rows use rerank depth 10.
+
+| row (dev, k = 10) | hit@1 | hit@5 | hit@10 | MRR | p50 ms |
+|---|---|---|---|---|---|
+| bm25 | 0.600 | 0.750 | 0.800 | 0.660 | 5 |
+| dense | 0.600 | 0.825 | 0.925 | 0.711 | 44 |
+| hybrid rrf (k=60) | 0.650 | 0.800 | 0.900 | 0.732 | 54 |
+| hybrid weighted min-max (w=0.5) | 0.700 | 0.850 | 0.925 | 0.766 | 50 |
+| hybrid rrf + rerank (10) | 0.750 | 0.900 | 0.900 | 0.806 | 854 |
+| hybrid min-max + rerank (10) | 0.775 | 0.900 | 0.925 | 0.834 | 1,050 |
+
+| paired difference in MRR | difference | 95% interval | better on / worse on |
+|---|---|---|---|
+| min-max minus dense | +0.056 | -0.046 to +0.160 | 9 / 9 |
+| rrf minus dense | +0.022 | -0.078 to +0.122 | 9 / 10 |
+| min-max minus rrf | +0.034 | +0.006 to +0.074 | 7 / 1 |
+| rrf + rerank minus rrf | +0.074 | -0.027 to +0.179 | 10 / 4 |
+| **min-max + rerank minus min-max** (the rule) | +0.068 | -0.019 to +0.162 | 8 / 3 |
+
+The interval of the rule's comparison includes 0, so the configuration is min-max without a reranker. What the 40 dev questions cannot show: that min-max beats dense (9 questions better, 9 worse), or that reranking helps (8 better, 3 worse, sign test p = 0.23). The one difference whose interval excludes 0 is min-max over RRF (7 better, 1 worse; sign test p = 0.07). Seven comparisons were made on the same questions, so even that one is weak. Latency is noisy: the p50 of min-max was 23 ms in the first table and 50 ms here.
+
+**Prediction for the test split** (20 questions, so one question is 0.05; the test split has not been run):
+
+| min-max row | dev | predicted test (range) |
+|---|---|---|
+| hit@1 | 0.700 | 0.65 (0.50 to 0.80) |
+| hit@5 | 0.850 | 0.80 (0.65 to 0.90) |
+| hit@10 | 0.925 | 0.90 (0.80 to 1.00) |
+| MRR | 0.766 | 0.70 (0.58 to 0.80) |
+
+Basis: the sampling error of a proportion near 0.7 on 20 questions is about 0.10 (square root of 0.7 x 0.3 / 20), which sets the width of the ranges. The 0.05 expected shrink comes from choosing among several methods and weights on the same 40 questions; it is a guess, because no earlier test run exists to calibrate it.
+
+Predictions about the whole table (each can be wrong):
+1. Min-max, dense and BM25 will be within one or two questions of each other on hit@1, so the test run will not separate them.
+2. The raw-sum row will stay close to BM25.
+3. The reranked rows will have a higher hit@1 than the rows they rerank, by one to three questions.
+4. Code questions will be worse with a reranker than without.
