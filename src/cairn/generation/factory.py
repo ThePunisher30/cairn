@@ -82,7 +82,10 @@ def build_llm(kind, *, model=None, effort="low", timeout=None, base_url="http://
         return llm, llm.model
     if kind == "ollama":
         model = model or "llama3.2"
-        return RetryingClient(OllamaClient(model, base_url=base_url, timeout=timeout)), model
+        # thinking off: a thinking model spends max_tokens on hidden reasoning and can return an
+        # empty answer (seen with gemma4:e4b, 40 tokens, done_reason "length")
+        client = OllamaClient(model, base_url=base_url, timeout=timeout, think=False)
+        return RetryingClient(client), model
     model = model or "claude-opus-5-5"
     return RetryingClient(AnthropicClient(model, timeout=timeout, effort=effort)), model
 
