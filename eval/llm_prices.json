@@ -2,5 +2,6 @@
   "_comment": "US dollars per million tokens, [input, output]. Copied from Anthropic's pricing table as it stood on 2026-10-06: check the pricing page before relying on it. The Haiku 5.5 price is for prompts up to 100K tokens.",
   "claude-opus-5-5": [4.0, 20.0],
   "claude-sonnet-5-5": [2.0, 10.0],
-  "claude-haiku-5-5": [0.10, 0.50]
+  "claude-haiku-5-5": [0.10, 0.50],
+  "gemma4:e4b": [0.0, 0.0]
 }
