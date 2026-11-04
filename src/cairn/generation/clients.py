@@ -19,7 +19,61 @@ def _usage(data):
     return Usage(data.get("prompt_eval_count", 0), data.get("eval_count", 0))
 
 
-class AnthropicClient: ...  # written in the next part
+def _sdk_usage(message):
+    return Usage(message.usage.input_tokens, message.usage.output_tokens)
+
+
+class AnthropicClient:
+    def __init__(
+        self, model="claude-opus-5-5", *, api_key=None, timeout=60.0, effort="low", sdk=None
+    ):
+        if sdk is None:
+            try:
+                import anthropic
+            except ImportError as exc:
+                raise ImportError(
+                    'the anthropic package is missing: pip install -e ".[llm]"'
+                ) from exc
+            sdk = anthropic.Anthropic(api_key=api_key, timeout=timeout, max_retries=0)
+        self.model = model
+        self.effort = effort
+        self.sdk = sdk
+        self.last_usage = None
+
+    def _request(self, system, messages, max_tokens):
+        request = {
+            "model": self.model,
+            "max_tokens": max_tokens,
+            "system": system,
+            "messages": messages,
+        }
+        if self.effort is not None:
+            request["output_config"] = {"effort": self.effort}
+        return request
+
+    def complete(self, system, messages, *, max_tokens=1024):
+        started = time.perf_counter()
+        try:
+            message = self.sdk.messages.create(**self._request(system, messages, max_tokens))
+        except Exception as exc:
+            _reraise(exc)
+        latency_ms = (time.perf_counter() - started) * 1000
+        self.last_usage = _sdk_usage(message)
+        return Completion(
+            text="".join(block.text for block in message.content if block.type == "text"),
+            usage=self.last_usage,
+            model=message.model,
+            stop_reason=message.stop_reason or "end_turn",
+            latency_ms=latency_ms,
+        )
+
+    def stream(self, system, messages, *, max_tokens=1024):
+        try:
+            with self.sdk.messages.stream(**self._request(system, messages, max_tokens)) as s:
+                yield from s.text_stream
+                self.last_usage = _sdk_usage(s.get_final_message())
+        except Exception as exc:
+            _reraise(exc)
 
 
 class OllamaClient:
