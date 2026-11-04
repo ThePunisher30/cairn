@@ -1,4 +1,5 @@
 import random
+import time
 from dataclasses import dataclass
 
 from cairn.generation.errors import (
@@ -83,7 +84,24 @@ def backoff_delay(attempt, policy, rng=random.random, retry_after=None):
     return min(delay, policy.max_delay)
 
 
-def call_with_retries(*args, **kwargs): ...
+def call_with_retries(fn, policy=None, *, sleep=time.sleep, rng=random.random, on_retry=None):
+    if policy is None:
+        policy = RetryPolicy()
+    failures = 0
+    while True:
+        try:
+            return fn()
+        except Exception as exc:
+            error = classify_error(exc)
+            failures += 1
+            if not error.retryable or failures >= policy.max_attempts:
+                if error is exc:
+                    raise
+                raise error from exc
+            delay = backoff_delay(failures - 1, policy, rng=rng, retry_after=error.retry_after)
+            if on_retry is not None:
+                on_retry(failures, error, delay)
+            sleep(delay)
 
 
 class RetryingClient: ...
