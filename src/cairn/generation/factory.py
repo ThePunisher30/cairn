@@ -65,12 +65,18 @@ def build_confidence(kind, dense):
     return None  # the Answerer's default: the best hit score
 
 
-def build_llm(kind, *, model=None, effort="low", timeout=60.0, base_url="http://localhost:11434",
+def build_llm(kind, *, model=None, effort="low", timeout=None, base_url="http://localhost:11434",
               responder=None):  # fmt: skip
-    """Returns (client, model name). Real clients come wrapped in your RetryingClient."""
+    """Returns (client, model name). Real clients come wrapped in your RetryingClient.
+
+    `timeout` None means 60 s for the Anthropic API and 900 s for Ollama: a local model on a CPU
+    needs minutes just to read a 3,000-token prompt (about 135 s measured), and a timeout would
+    only make `RetryingClient` start the same slow call again."""
     from cairn.generation.clients import AnthropicClient, OllamaClient
     from cairn.generation.retry import RetryingClient
 
+    if timeout is None:
+        timeout = 900.0 if kind == "ollama" else 60.0
     if kind == "fake":
         llm = FakeLLM(responder=responder or demo_responder)
         return llm, llm.model
