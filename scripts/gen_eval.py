@@ -166,9 +166,11 @@ def main(argv: list[str] | None = None) -> int:
             reranker=args.reranker,
         )
         llm, model = build_llm(args.llm, model=args.model, effort=args.effort)
-        judge_llm, judge_model = build_llm(
-            args.judge_llm or args.llm, model=args.judge_model, effort=args.effort
-        )
+        judge_kind = args.judge_llm or args.llm
+        judge_model = args.judge_model
+        if judge_model is None and judge_kind == args.llm:
+            judge_model = args.model  # the same model judges, unless another one is named
+        judge_llm, judge_model = build_llm(judge_kind, model=judge_model, effort=args.effort)
         prices = load_prices(args.prices) if args.prices.is_file() else None
         if args.llm == "fake":
             prices = {model: (3.0, 15.0)}  # so that the demo run shows a cost
