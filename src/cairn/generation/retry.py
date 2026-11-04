@@ -1,3 +1,4 @@
+import random
 from dataclasses import dataclass
 
 from cairn.generation.errors import (
@@ -74,7 +75,12 @@ def classify_error(exc):
 
 
 # placeholders so that the test file can be imported (the real ones come in the next steps)
-def backoff_delay(*args, **kwargs): ...
+def backoff_delay(attempt, policy, rng=random.random, retry_after=None):
+    cap = min(policy.max_delay, policy.base_delay * 2**attempt)
+    delay = rng() * cap if policy.jitter else cap
+    if retry_after is not None:
+        delay = max(delay, retry_after)
+    return min(delay, policy.max_delay)
 
 
 def call_with_retries(*args, **kwargs): ...
