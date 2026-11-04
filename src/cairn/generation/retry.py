@@ -104,4 +104,52 @@ def call_with_retries(fn, policy=None, *, sleep=time.sleep, rng=random.random, o
             sleep(delay)
 
 
-class RetryingClient: ...
+class RetryingClient:
+    def __init__(self, inner, policy=None, *, sleep=time.sleep, rng=random.random):
+        self._inner = inner
+        self._policy = RetryPolicy() if policy is None else policy
+        self._sleep = sleep
+        self._rng = rng
+        self.retries = 0
+
+    @property
+    def model(self):
+        return getattr(self._inner, "model", "")
+
+    @property
+    def last_usage(self):
+        return self._inner.last_usage
+
+    def _count_retry(self, attempt, error, delay):
+        self.retries += 1
+
+    def complete(self, system, messages, *, max_tokens=1024):
+        return call_with_retries(
+            lambda: self._inner.complete(system, messages, max_tokens=max_tokens),
+            self._policy,
+            sleep=self._sleep,
+            rng=self._rng,
+            on_retry=self._count_retry,
+        )
+
+    def stream(self, system, messages, *, max_tokens=1024):
+        failures = 0
+        while True:
+            started = False
+            try:
+                for piece in self._inner.stream(system, messages, max_tokens=max_tokens):
+                    started = True
+                    yield piece
+                return
+            except Exception as exc:
+                error = classify_error(exc)
+                failures += 1
+                if started or not error.retryable or failures >= self._policy.max_attempts:
+                    if error is exc:
+                        raise
+                    raise error from exc
+                delay = backoff_delay(
+                    failures - 1, self._policy, rng=self._rng, retry_after=error.retry_after
+                )
+                self.retries += 1
+                self._sleep(delay)
