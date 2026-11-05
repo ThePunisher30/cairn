@@ -761,7 +761,7 @@ All 10 unanswerable questions were refused by the model itself. The 10 questions
 
 ### The judge, and how far it can be trusted
 
-15 answers were sampled (`seed 0`) and graded **blind to the judge's verdict**. The grader was Claude, not the author (the author's own check of a few is still open). Agreement with the hand labels:
+15 answers were sampled (`seed 0`) and graded **blind to the judge's verdict**. The grader was the AI assistant used on this project, not the author (the author's own check of a few is still open). Agreement with the hand labels:
 
 | judge prompt | correct: agreement / kappa | faithful: agreement / kappa | headline correctness | headline faithfulness |
 |---|---|---|---|---|

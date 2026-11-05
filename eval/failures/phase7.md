@@ -36,4 +36,4 @@ Answers a judge flagged and a human reading did not (from the 15 hand-graded ans
 
 ## Hand grading
 
-15 answers were graded blind to the judge's verdicts. The grader was Claude, not the author; the author's own check of a few is still open. Agreement with `judge_v1`: correct 0.867 (kappa 0.667), faithful 0.733 (kappa 0.250). With `judge_v2`: correct 0.867 (kappa 0.727), faithful 0.800 (kappa -0.098). Only one of the 15 was unfaithful by that grading, so the faithful kappas are close to meaningless. `judge_v2` was written after seeing the `v1` disagreements on the same 15, so its agreement is optimistic.
+15 answers were graded blind to the judge's verdicts. The grader was the AI assistant used on this project, not the author; the author's own check of a few is still open. Agreement with `judge_v1`: correct 0.867 (kappa 0.667), faithful 0.733 (kappa 0.250). With `judge_v2`: correct 0.867 (kappa 0.727), faithful 0.800 (kappa -0.098). Only one of the 15 was unfaithful by that grading, so the faithful kappas are close to meaningless. `judge_v2` was written after seeing the `v1` disagreements on the same 15, so its agreement is optimistic.
