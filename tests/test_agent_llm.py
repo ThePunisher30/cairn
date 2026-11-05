@@ -93,6 +93,15 @@ def test_a_plain_reply_has_no_tool_calls():
     assert FakeLLM(["hi"]).complete("s", QUESTION).tool_calls == ()
 
 
+def test_a_fake_that_is_called_forever_fails_instead_of_hanging():
+    # a responder never runs dry: without a limit, a loop that forgot to stop would hang the tests
+    fake = FakeLLM(responder=lambda system, messages: "again", max_calls=20)
+    with pytest.raises(AssertionError, match="looping"):
+        for _ in range(1000):
+            fake.complete("s", QUESTION)
+    assert len(fake.calls) <= 21
+
+
 # ------------------------------------------------------------------ RetryingClient
 class OldClient:
     """A client from before Phase 8: no `tools` argument."""

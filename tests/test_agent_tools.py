@@ -76,6 +76,7 @@ The four corpus tools
 """
 
 import os
+import subprocess
 
 import pytest
 
@@ -469,6 +470,31 @@ def test_a_symlink_that_points_outside_is_refused(corpus):
         pytest.skip("this system does not allow symbolic links")
     tools, _ = tools_for(corpus)
     result = call(tools, "read_file", path="docs/link.md", start=1, end=2)
+    assert result.error and "outside" in result.error
+    assert "top secret" not in result.text
+
+
+def _link_directory(link, target):
+    """A directory link, or None if the system refuses. On Windows a junction needs no rights."""
+    try:
+        os.symlink(target, link, target_is_directory=True)
+        return True
+    except (OSError, NotImplementedError):
+        pass
+    if os.name == "nt":
+        made = subprocess.run(
+            ["cmd", "/c", "mklink", "/J", str(link), str(target)], capture_output=True
+        )
+        return made.returncode == 0
+    return False
+
+
+def test_a_directory_link_that_points_outside_is_refused(corpus):
+    # `docs/up` leads to the folder above the corpus, where secret.txt lives
+    if not _link_directory(corpus / "docs" / "up", corpus.parent):
+        pytest.skip("this system does not allow directory links")
+    tools, _ = tools_for(corpus)
+    result = call(tools, "read_file", path="docs/up/secret.txt", start=1, end=2)
     assert result.error and "outside" in result.error
     assert "top secret" not in result.text
 

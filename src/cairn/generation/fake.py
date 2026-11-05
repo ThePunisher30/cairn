@@ -7,7 +7,8 @@ Provided, not part of the exercise.
 Each call takes the next item: a str becomes a Completion, a Completion is returned as it is, an
 exception is raised. When the list is empty the `responder` (a function of system and messages) is
 asked instead; with neither, the call fails loudly. `stream` answers the same way, in word-sized
-pieces. A `Partial(text, error)` item streams `text` and then raises `error`.
+pieces. A `Partial(text, error)` item streams `text` and then raises `error`. After `max_calls`
+calls (default 500) it raises AssertionError, so a loop that never stops fails instead of hanging.
 
 For the agent (Phase 8): `tool_reply(("search", {"query": "cors"}), ("read_chunk", {"id": 1}))` is
 a Completion that asks for those tool calls (ids are made up: call_1, call_2, ...). `complete`
@@ -42,15 +43,30 @@ class Partial:
 
 
 class FakeLLM:
-    def __init__(self, replies=None, *, responder=None, model="fake-model", usage=DEFAULT_USAGE):
+    def __init__(
+        self,
+        replies=None,
+        *,
+        responder=None,
+        model="fake-model",
+        usage=DEFAULT_USAGE,
+        max_calls=500,
+    ):
         self.replies = list(replies or [])
         self.responder = responder
         self.model = model
         self.usage = usage
+        self.max_calls = max_calls
         self.calls: list[dict] = []
         self.last_usage: Usage | None = None
 
     def _next(self, system, messages):
+        # A responder that always answers never runs dry, so code that forgot to stop (a loop
+        # without a budget check) would hang the test suite. This turns the hang into a failure.
+        if len(self.calls) > self.max_calls:
+            raise AssertionError(
+                f"FakeLLM was called more than {self.max_calls} times: is the code looping?"
+            )
         if self.replies:
             return self.replies.pop(0)
         if self.responder is not None:
