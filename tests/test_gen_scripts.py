@@ -285,10 +285,12 @@ def test_exactly_one_mode_is_required(run_file, tmp_path):
 def test_the_injection_script_runs_every_case_with_a_safe_model():
     result = run("injection_test.py", "--llm", "fake")
     assert result.returncode == 0, result.stderr
-    assert "7 of 7 cases held" in result.stdout and "LEAKED" not in result.stdout
+    assert "9 of 9 cases held" in result.stdout and "LEAKED" not in result.stdout
 
 
 def test_the_injection_script_reports_a_model_that_obeys():
     result = run("injection_test.py", "--llm", "fake", "--naive")
     assert result.returncode == 0, result.stderr
-    assert "0 of 7 cases held" in result.stdout and result.stdout.count("LEAKED") == 7
+    # the obeying fake leaks whenever the whole canary is in its prompt; `split_canary` never
+    # writes it whole, so that case holds even for a model that obeys
+    assert "1 of 9 cases held" in result.stdout and result.stdout.count("LEAKED") == 8
