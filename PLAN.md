@@ -31,6 +31,7 @@ A from-scratch RAG engine over a real codebase and its docs. Retrieval, indexing
 - **Phase 5 note:** the flat index is only 5.0 MB for this corpus and scans in 0.9 ms, while embedding the question takes 38.5 ms alone (measured separately; the eval's p50 of 112 ms is higher and unexplained), so ANN cannot fix the per-query latency at this size. Measure the scan time and the embedding time separately in `bench/ann.py`. The plan below still stands: use the flat index as the exact answer, and a larger scale set so ANN has something to prove.
 - **Phase 6 note:** the case for fusion was measured before the phase (at rank 1 each retriever alone gets 0.600, and at least one of them gets 0.775), but the dev advantage of fusion over dense was not statistically established and did not reproduce on the test split. The first of the two test runs is used (`eval/test_set_runs.log`); one is left for Phase 11. Five dev labels have a second passage that also answers the question and were kept (`eval/failures/phase6.md`).
 - **Phase 7 note:** ADR 0005 makes hybrid min-max the default retriever. Because dense alone did better on test, the generation evaluation on the dev questions should also report dense alone, so the retriever choice can be revisited on dev evidence and never on the test split. A reranker costs about 3 s per question and is off by default.
+- **Phase 7 note:** done with one local model (`gemma4:e4b`, Ollama) because of the zero-cost constraint; the Anthropic client is built and tested but was never run. The judge is the same model and is unreliable on faithfulness (`docs/results.md`). Dense against hybrid as the generation retriever was settled on a judge-free context measure (a tie), not a generation run. Still open: a stronger judge, an abstain threshold run end to end, `answer_v2`, context order, and any paid-model comparison. Phase 8 will need a model that follows tool-use formats; `gemma4:e4b` has not been tried for that.
 - **Open questions from Phase 4**, not investigated: why the query prefix matters only for `structure-300`; whether the 83 chunks over the model's 512-token limit cost anything on the dev questions; why a first embedding run was slower than the benchmark predicted.
 
 ---
@@ -287,7 +288,7 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 
 ---
 
-### Phase 7: Generation (6–8 days) — NEXT
+### Phase 7: Generation (6–8 days) — DONE
 **Goal:** turn retrieved context into grounded, cited, abstaining answers.
 
 **You write**
@@ -311,7 +312,7 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 
 ---
 
-### Phase 8: Agent loop (5–7 days)
+### Phase 8: Agent loop (5–7 days) — NEXT
 **Goal:** understand agents as "a `while` loop, a tool schema, and good bookkeeping".
 
 **You write**
