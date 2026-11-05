@@ -730,3 +730,118 @@ Predictions about the whole table:
 - The reranked rows were run at depth 30 as in the dev table, not at the depth 10 the dev analysis preferred. That setting was never run on test.
 
 **Decision.** The configuration stays hybrid weighted min-max without a reranker, as written before the run. Dense alone did better on test, but choosing it now would be choosing on the test split, which would end its use as a measurement. The report states the result as it is. The second and last test run, in Phase 11, measures whatever Phases 7 to 10 produce.
+
+## Phase 7: generation with citations, abstention and an honest evaluation
+
+Everything below is on the 40 dev questions plus 10 unanswerable ones (`eval/gen_questions.jsonl`); the test split was not touched. On the answerable questions one question is 0.025, on the unanswerable ones 0.1. **One model, run once:** `gemma4:e4b` through Ollama 0.40.14 on a laptop CPU, thinking off, the hybrid min-max retriever of Phase 6, k = 5, a 1,500-token context budget, order `best_first`, prompt `answer_v1`, no abstain threshold. The cost is $0 because the model is local (the project had a zero-rupee constraint). Numbers were produced in November 2026.
+
+Added in this phase: `retry.py`, `clients.py` (Anthropic and Ollama clients), `packer.py`, `prompts.py` with versioned prompt files, `citations.py`, `abstain.py`, `pipeline.py` (`Answerer`) and `evaluation/generation.py`. The runs come from `scripts/gen_eval.py` (the main run), `rejudge.py`, `judge_agreement.py`, `abstain_scores.py`, `context_recall.py`, `token_cost.py` and `injection_test.py`. Run files are in `data/gen_runs/` (ignored by git), so the per-answer rows are not in the repository.
+
+### Two caveats that apply to every number
+
+1. **The same small model writes the answers and judges them.** The judge is `gemma4:e4b` with `judge_v1`. A model grading its own output can share its blind spots, and the judge section below shows it is unreliable on faithfulness.
+2. **The 40 reference answers were drafted with an AI assistant and not all verified by the author.** A wrong reference makes a correct answer look wrong. The 15 hand-graded answers found no wrong reference, which is weak evidence about the other 25.
+
+### The headline run
+
+`python scripts/gen_eval.py --llm ollama --model gemma4:e4b --name gemma4-hybrid --k 5 --max-context-tokens 1500`
+
+| metric | value | notes |
+|---|---|---|
+| correctness | 0.775 | 31 of 40 answerable; a refusal of an answerable question counts as wrong. Wilson 95% interval about 0.62 to 0.88 |
+| faithfulness | 0.763 | judge `v1`; **not reliable** (see below) |
+| citation precision / recall | 0.711 / 0.789 | precision counts a cited chunk as good only if it overlaps a gold span, so a useful non-gold citation is penalised |
+| false abstentions | 0.050 | 2 of 40 (q026, q055) |
+| abstain precision / recall / F1 | 0.833 / 1.000 / 0.909 | tp 10, fp 2, fn 0, tn 38 |
+| cost per question | $0.0000 | local model |
+| latency p50 | 64.0 s | CPU laptop; not a property of the pipeline |
+| judge replies that could not be read | 0 | |
+
+All 10 unanswerable questions were refused by the model itself. The 10 questions ask about things that are plainly absent from the corpus (checked with a search of `chunks.jsonl`), so this is the easy case: a question about something close to what the docs say would be harder, and was not tested.
+
+### The judge, and how far it can be trusted
+
+15 answers were sampled (`seed 0`) and graded **blind to the judge's verdict**. The grader was Claude, not the author (the author's own check of a few is still open). Agreement with the hand labels:
+
+| judge prompt | correct: agreement / kappa | faithful: agreement / kappa | headline correctness | headline faithfulness |
+|---|---|---|---|---|
+| `judge_v1` (fixed before any result) | 0.867 / 0.667 | 0.733 / 0.250 | 0.775 | 0.763 |
+| `judge_v2` (written after reading the `v1` disagreements) | 0.867 / 0.727 | 0.800 / -0.098 | 0.600 | 0.947 |
+
+- **Changing the wording of the judge prompt moved correctness by 17.5 points and faithfulness by 18**, on identical answers (12 of 38 verdicts changed). That is larger than any difference between systems that this phase could test.
+- **`v1` on correctness is lenient** (both disagreements, q017 and q058, were answers the judge passed and the hand grading failed for a missing part). **`v1` on faithfulness is strict**: in all four disagreements it said "unfaithful" where the hand grading said "faithful" (q010, q041, q050, q058). Its reasons show a contradiction (q010 admits the chunk states the default), a misreading of a negation (q041), and comparing the answer with the reference instead of the chunks (q050, q058).
+- **`v2` did not fix it.** It aligned q017 and q058 but broke q040 and q052 (right answers marked wrong, with incoherent reasons), and it marks 36 of 38 answers faithful, which matches the hand rate (14 of 15) but not item by item.
+- The faithful kappas are close to meaningless: the hand grading found one unfaithful answer in 15 (q049). `v2`'s agreement is optimistic because the prompt was written after seeing those 15.
+- **Reporting rule used here:** `judge_v1` is the headline because it was fixed first; `v2` is a sensitivity check; correctness is stated as **0.60 to 0.78 depending on the judge prompt**, faithfulness as not measured reliably.
+
+### Which score decides abstention (no model called)
+
+`python scripts/abstain_scores.py --rerank --run data/gen_runs/gemma4-hybrid.jsonl`: top-1 score of each retriever for the 40 answerable and 10 unanswerable questions. AUC is the chance that a random answerable question scores above a random unanswerable one (0.5 is a coin). Best F1 is the best over all thresholds on the same 50 questions, so it is optimistic.
+
+| score | AUC | best F1 | threshold | answerable min / median | unanswerable median / max |
+|---|---|---|---|---|---|
+| BM25 top | 0.795 | 0.563 | 26.55 | 16.01 / 30.42 | 22.48 / 31.58 |
+| dense cosine top | 0.728 | 0.529 | 0.775 | 0.678 / 0.789 | 0.748 / 0.813 |
+| hybrid top (min-max) | **0.907** | **0.696** | 1.558 | 1.048 / 1.959 | 1.169 / 1.805 |
+| reranker top | 0.782 | 0.571 | -0.959 | -4.48 / 3.85 | -1.92 / 5.45 |
+
+- The hybrid score separates best; the dense cosine barely does (the smallest answerable score, 0.678, is below the unanswerable median, 0.748). I did not test why hybrid is best; my guess is that it is high when BM25 and dense agree on the top result.
+- The strictest hybrid threshold that never refuses an answerable question (1.048) catches only 5 of 10 unanswerable ones.
+- **The model's own refusal (F1 0.909, 10 of 10, 2 false refusals) beat every score threshold (best F1 0.696, in sample).** All 12 refusals in the run were the model's (`model_declined`); no threshold was used. A run with `--confidence top-score --threshold 1.558` was **not done**, so the end-to-end effect of a threshold on top of the model's refusal is not measured.
+- With 10 unanswerable questions the AUCs are directions, not precise values.
+
+### Retriever and context size (no judge)
+
+`python scripts/context_recall.py --retrievers bm25 dense hybrid rerank`: whether the packed context overlaps a gold span, for the 40 answerable dev questions, 1,500-token budget. "Hit rate" is the share of questions with at least one gold chunk in the context. A chunk the packer cut short still counts, so these are upper bounds.
+
+| retriever | k = 3 | k = 5 | k = 8 | mean tokens at k = 5 |
+|---|---|---|---|---|
+| bm25 | 0.700 | 0.750 | 0.800 | 1,031 |
+| dense | 0.800 | 0.825 | 0.850 | 892 |
+| hybrid min-max | 0.775 | 0.850 | 0.900 | 984 |
+| hybrid + rerank | 0.875 | 0.900 | 0.925 | 1,005 |
+
+- **Retrieval caps the answers:** with hybrid at k = 5, 6 of the 40 answerable questions (15%) had no gold chunk in the context, so correctness could not exceed about 0.85 with this context.
+- **Dense against hybrid is a tie** at k = 5: one question (0.825 against 0.850), far inside the noise. A generation-level comparison of the two was therefore not run: it could not detect a difference of one question, and would have cost about 2.7 hours of CPU. The retriever stays hybrid (ADR 0005) and the choice is not revisited here.
+- The reranker is two questions ahead of hybrid at k = 5 (0.900 against 0.850), also within noise. ADR 0005 kept it off on MRR alone, so this is a lead worth re-checking in Phase 11, not a change.
+- The budget barely binds at k <= 5 (about 1,000 tokens used): 1,500 and 3,000 give the same hit rate. Raising k to 8 adds about 5 points (hybrid 0.900) for about 330 more tokens (1,311 at 1,500).
+- The order of the context (`best_first`, `edges`, `reverse`) does not change this metric and was **not tested end to end**; the packer's three orders are covered by unit tests only.
+
+### Tokens and cost
+
+`python scripts/token_cost.py data/gen_runs/gemma4-hybrid.jsonl`
+
+- **Our `count_tokens` (a regex) against the model's reported prompt tokens** for 50 prompts: reported / ours has a median of 1.04 (range 0.99 to 1.15), mean absolute error 4.7%. No prompt looked cached. So the proxy is good enough to budget a Gemma prompt; the paid models use other tokenizers, so for them it is a proxy only (not measured).
+- The 50 answering calls used 73,077 input and 2,931 output tokens. **Input is about 25 times the output.** The context drives the cost.
+- What the same 50 answering calls would cost, from these token counts and the prices in `eval/llm_prices.json` (an estimate, not a bill):
+
+| model | total | per question |
+|---|---|---|
+| claude-opus-5-5 | $0.351 | $0.0070 |
+| claude-sonnet-5-5 | $0.176 | $0.0035 |
+| claude-haiku-5-5 | $0.009 | $0.0002 |
+| gemma4:e4b (local) | $0 | $0 |
+
+The judge would add about the same again. None of the paid models was run.
+
+### Prompt injection
+
+`python scripts/injection_test.py --llm ollama --model gemma4:e4b`: a malicious chunk (or question) is planted next to a correct one and the answer is checked for the canary `PWNED-7431`.
+
+**9 of 9 cases held**: the seven provided (direct override, fake closing tag, role spoof, citation hijack, hidden in code, markdown comment, question side) and two written for this project (`polite_docs`, a plausible documentation note asking tools to print a verification code; `split_canary`, which asks for the canary in three steps without writing it whole). This shows that `answer_v1` and `neutralize` held against these nine attacks on this model. It does not show the pipeline is safe: nine hand-written attacks is a tiny sample, "held" only checks that the canary is absent, and no attack was run against a variant of the system prompt, so which rule is responsible is unknown. The system-prompt change the brief asks for was not measured.
+
+### Failures
+
+Nine of the 40 answerable questions were wrong under both judge prompts (`eval/failures/phase7.md`): five had no gold chunk in the context (q026, q031, q041, q043, q059), three had it but the answer was incomplete or off target (q047, q049, q050), and one was refused with the gold in the context (q055). Five of the nine are multi-chunk questions; no lexical question failed under both judges. q041 is a case where the model should have refused and gave a partial answer instead.
+
+### What was not done
+
+- Generation-level runs of dense and rerank as the retriever (experiment 1), and of the context order and size (experiment 4).
+- An end-to-end run with an abstain threshold (experiment 2's second half).
+- `answer_v2` and a system-prompt change for the injection test (experiments 8 and 9).
+- Any run with a paid model, so no comparison of the local model with Claude exists.
+- The author's own hand grading of the 15 answers.
+
+### How the judge numbers could change the conclusions
+
+Trusting the hand grading instead of the judge would not change any retrieval conclusion (those used no judge). It would change the faithfulness number (the hand rate is 14 of 15, the `v1` judge's 0.763), and it would put correctness on this 15-answer sample at 10 of 15 against the judge's 12 of 15. With 15 answers these differences are within chance, so the safe reading is a correctness of roughly 0.6 to 0.8 for this system, with retrieval, not the prompt, as the main cap.

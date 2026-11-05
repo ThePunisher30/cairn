@@ -4,7 +4,7 @@ A from-scratch RAG engine over the [FastAPI](https://github.com/fastapi/fastapi)
 
 The point of the project is to understand every layer and to measure each choice, so every number below traces to a row in [`docs/results.md`](docs/results.md).
 
-**Status: Phases 0-6 of 11 are done.** Retrieval works and is measured. Generation, the agent loop, serving and the demo are not built yet (see [Roadmap](#roadmap)).
+**Status: Phases 0-7 of 11 are done.** Retrieval and generation work and are measured. The agent loop, serving and the demo are not built yet (see [Roadmap](#roadmap)).
 
 ## Results so far
 
@@ -46,6 +46,18 @@ The 20 test questions were run once, for the whole table, after the configuratio
 - Small-to-big expansion added 0.030 of gold-line coverage for 2.1 times the tokens.
 
 Failures are analysed one by one in [`eval/failures/phase4.md`](eval/failures/phase4.md) (16 dense failures, classified by cause) and [`eval/failures/phase6.md`](eval/failures/phase6.md) (11 failures of hybrid + rerank).
+
+### Generation (Phase 7), dev only
+
+One local model (`gemma4:e4b` through Ollama, $0), hybrid retriever, k = 5, 40 answerable and 10 unanswerable dev questions, one run. The same small model also judges its answers, so read these as a first measurement, not a verdict.
+
+- **Correctness 0.775** (31 of 40; a refusal counts as wrong), but it is **0.60 under a second judge prompt** on identical answers: the wording of the judge moved the score by 17.5 points. Faithfulness (0.763 and 0.947 under the two prompts) is not reliable: the judge disagreed with a hand grading on 4 of 15 answers.
+- **Abstention:** the model refused all 10 unanswerable questions and 2 of 40 answerable ones (F1 0.909), better than any retrieval-score threshold (best F1 0.696, fitted on the same questions). The 10 unanswerable questions are about topics absent from the corpus, which is the easy case.
+- **Retrieval is the cap:** with hybrid at k = 5, 6 of the 40 answerable questions had no gold chunk in the context. Dense and hybrid are a tie on that measure (0.825 against 0.850, one question).
+- **Cost:** input tokens are about 25 times the output. The same 50 answers would cost about $0.35 on Opus 5.5 and $0.01 on Haiku 5.5 (estimated from token counts; no paid model was run).
+- **Prompt injection:** 9 of 9 hand-written attacks held on this model. That is all it shows.
+
+The failures are classified in [`eval/failures/phase7.md`](eval/failures/phase7.md).
 
 ## How it is evaluated
 
@@ -116,7 +128,7 @@ docs/           results.md (every number), adr/ (decisions), notes/ (what I lear
 PLAN.md         the full 11-phase plan and its status
 ```
 
-Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md).
+Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md), [generation](docs/adr/0006-generation.md).
 
 ## Roadmap
 
@@ -129,8 +141,8 @@ Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM
 | 4 | Dense retrieval: embedder, cache, flat index | done |
 | 5 | Approximate nearest-neighbour indexes (k-means, IVF, HNSW) from scratch | done |
 | 6 | Hybrid retrieval (rank fusion), cross-encoder reranking, small-to-big expansion; first run of the test split | done |
-| 7 | Generation with citations and abstention, LLM client, generation eval | next |
-| 8 | Agent loop with tools | planned |
+| 7 | Generation with citations and abstention, LLM client, generation eval | done |
+| 8 | Agent loop with tools | next |
 | 9 | FastAPI service: streaming, incremental indexing, caching, rate limiting, load test | planned |
 | 10 | Frontend, Docker, CI with a retrieval-regression gate, deployment | planned |
 | 11 | Benchmark against LangChain / LlamaIndex and a vector database; write-up | planned |
@@ -141,4 +153,4 @@ The details of each phase are in [`PLAN.md`](PLAN.md).
 
 This is a learning project built with an AI assistant (Claude) as tutor and pair: it wrote the phase briefs and the tests that each phase has to pass, helped with the implementation, and reviewed the code. The evaluation questions were drafted the same way (see above). The experiments, the measurements and the failure analyses are run on the real corpus, and the notes in `docs/notes/` record what each phase taught.
 
-The API key (needed from Phase 7) is read from the `ANTHROPIC_API_KEY` environment variable and is never in the code.
+The Anthropic client (Phase 7) reads its key from the `ANTHROPIC_API_KEY` environment variable and the key is never in the code. All Phase 7 numbers come from a local model, so no key was used.
