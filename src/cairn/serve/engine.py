@@ -39,6 +39,7 @@ class EngineConfig:
     semantic_cache: bool = False  # off by default: see docs/results.md for why
     semantic_threshold: float = 0.92
     max_concurrent_retrievals: int = 4
+    torch_threads: int = 1  # see docs/results.md: more threads per request means fewer requests/s
     retrieval_wait_s: float = 2.0
     breaker_failures: int = 3
     breaker_cooldown_s: float = 30.0
@@ -102,6 +103,17 @@ class LimitedRetriever:
             return self._retriever.search(query, k)
 
 
+def set_torch_threads(n):
+    """Torch uses every core for one small matrix product by default. With several requests at
+    once the threads of different requests fight for the same cores, and total throughput falls
+    (measured: 15 requests/s with 12 threads against 27 with 1). Does nothing without torch."""
+    try:
+        import torch
+    except ImportError:
+        return
+    torch.set_num_threads(n)
+
+
 def build_engine(cfg):
     data = Path(cfg.data_dir)
     chunks = read_chunks(data / "chunks.jsonl")
@@ -110,6 +122,7 @@ def build_engine(cfg):
         raise ValueError("chunks.jsonl and the dense index do not match: rebuild the index")
     live = LiveIndex.build(chunks, flat.vectors)
     embedder = load_embedder(cfg.embedding_model)
+    set_torch_threads(cfg.torch_threads)
     retriever = HybridRetriever(
         [LiveBM25(live), LiveDense(embedder, live)], depth=50, method="weighted", normalize="minmax"
     )
@@ -144,6 +157,8 @@ def build_engine(cfg):
 
     breaker = CircuitBreaker(cfg.breaker_failures, cfg.breaker_cooldown_s)
     llm, model = build_llm(cfg.llm, model=cfg.model, timeout=cfg.llm_timeout)
+    if hasattr(llm, "max_calls"):
+        llm.max_calls = 10**12  # the fake's loop guard is for tests; a service is meant to run on
     prices_path = config.PROJECT_ROOT / "eval" / "llm_prices.json"
     prices = load_prices(prices_path) if prices_path.is_file() else None
     return Engine(
