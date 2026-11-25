@@ -1,6 +1,7 @@
 """Run the Cairn HTTP service (Phase 9).
 
     CAIRN_API_KEY=some-long-secret python scripts/serve.py
+    python scripts/serve.py --llm none --retriever bm25 --no-auth   # the small public demo
     python scripts/serve.py --llm fake --no-auth          # no model, no key: for trying it out
     python scripts/serve.py --llm anthropic --model claude-opus-5-5   # needs ANTHROPIC_API_KEY
 
@@ -17,7 +18,7 @@ from pathlib import Path
 from cairn.config import load_settings
 from cairn.generation.factory import LLMS
 from cairn.serve.app import create_app
-from cairn.serve.engine import EngineConfig, build_engine, warm_up
+from cairn.serve.engine import RETRIEVERS, EngineConfig, build_engine, warm_up
 from cairn.serve.observe import configure_logging
 from cairn.serve.state import Service
 
@@ -29,7 +30,11 @@ def main(argv=None):
     parser.add_argument("--port", type=int, default=8000)
     parser.add_argument("--data-dir", type=Path, default=settings.data_dir)
     parser.add_argument("--corpus-root", type=Path, default=None)
-    parser.add_argument("--llm", choices=LLMS, default="ollama")
+    parser.add_argument("--llm", choices=[*LLMS, "none"], default="ollama",
+                        help="none: retrieval only, /ask returns the passages")  # fmt: skip
+    parser.add_argument("--retriever", choices=RETRIEVERS, default="hybrid",
+                        help="bm25 needs no embedding model and little memory")  # fmt: skip
+    parser.add_argument("--ollama-url", default="http://localhost:11434")
     parser.add_argument("--model", default=None)
     parser.add_argument("--llm-timeout", type=float, default=120.0)
     parser.add_argument("--no-auth", action="store_true", help="no API key (local use only)")
@@ -60,6 +65,8 @@ def main(argv=None):
         data_dir=args.data_dir,
         corpus_root=args.corpus_root,
         llm=args.llm,
+        retriever=args.retriever,
+        llm_base_url=args.ollama_url,
         model=args.model or ("gemma4:e4b" if args.llm == "ollama" else None),
         llm_timeout=args.llm_timeout,
         semantic_cache=args.semantic_cache,

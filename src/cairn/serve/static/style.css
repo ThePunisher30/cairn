@@ -1,0 +1,163 @@
+:root {
+  --bg: #f7f6f2;
+  --surface: #ffffff;
+  --ink: #1d2327;
+  --muted: #5b6770;
+  --line: #d9d6cc;
+  --accent: #1f6f5c;
+  --accent-ink: #ffffff;
+  --chip: #e4f1ec;
+  --warn-bg: #fff4d6;
+  --warn-ink: #5c4300;
+  --hit: #fff1b8;
+  --focus: #0a58ca;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #14181a;
+    --surface: #1c2224;
+    --ink: #e8ece9;
+    --muted: #9aa7a1;
+    --line: #333b3d;
+    --accent: #5fc0a5;
+    --accent-ink: #0d1412;
+    --chip: #213a33;
+    --warn-bg: #3a3012;
+    --warn-ink: #f3dc9a;
+    --hit: #4a4217;
+    --focus: #7aa9ff;
+  }
+}
+
+* { box-sizing: border-box; }
+
+/* a class that sets `display` must not defeat the hidden attribute */
+[hidden] { display: none !important; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.wrap { max-width: 52rem; margin: 0 auto; padding: 0 16px; }
+
+.top { border-bottom: 1px solid var(--line); padding: 20px 0 12px; }
+h1 { margin: 0; font-size: 1.6rem; letter-spacing: 0.02em; }
+.tagline { margin: 4px 0 8px; color: var(--muted); }
+.status { margin: 0; font-size: 0.85rem; color: var(--muted); }
+
+main { padding-top: 20px; padding-bottom: 48px; }
+
+label { display: block; font-weight: 600; margin-bottom: 6px; }
+.row { display: flex; gap: 8px; margin-bottom: 8px; }
+.key-row { align-items: center; }
+.key-row label { margin: 0; white-space: nowrap; }
+
+input[type="text"], input[type="password"] {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 12px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  padding: 8px 12px;
+}
+
+#ask-button {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+  font-weight: 600;
+  padding: 10px 18px;
+}
+#ask-button:disabled { opacity: 0.6; cursor: progress; }
+
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.examples { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 0.9rem; color: var(--muted); }
+.example { font-size: 0.85rem; padding: 4px 10px; }
+
+.card {
+  margin-top: 20px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.answer { white-space: pre-wrap; overflow-wrap: anywhere; }
+.answer.idk { color: var(--muted); font-style: italic; }
+
+.notice {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--warn-bg);
+  color: var(--warn-ink);
+  font-size: 0.92rem;
+}
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.chip {
+  background: var(--chip);
+  border-color: transparent;
+  font-size: 0.85rem;
+  padding: 3px 9px;
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+}
+.cite { padding: 0 6px; font-size: 0.8rem; margin: 0 1px; }
+
+.passages { margin: 16px 0 0; padding-left: 1.3rem; }
+.passages li { margin-bottom: 14px; }
+.passages .where { font-family: ui-monospace, Consolas, monospace; font-size: 0.85rem; }
+.passages pre {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  max-height: 11rem;
+  overflow: auto;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.82rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.meta { margin-top: 14px; color: var(--muted); font-size: 0.82rem; }
+
+dialog {
+  width: min(56rem, 94vw);
+  max-height: 86vh;
+  padding: 0;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+dialog::backdrop { background: rgba(0, 0, 0, 0.5); }
+.viewer-head { display: flex; gap: 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.viewer-head h2 { flex: 1; margin: 0; font-size: 0.95rem; font-family: ui-monospace, Consolas, monospace; overflow-wrap: anywhere; }
+.viewer-head a { font-size: 0.9rem; color: var(--accent); }
+.code { margin: 0; padding: 8px 0; overflow: auto; max-height: 70vh; font: 0.82rem/1.5 ui-monospace, "SF Mono", Consolas, monospace; }
+.code .ln { display: block; padding: 0 14px; white-space: pre; }
+.code .ln.cited { background: var(--hit); }
+.code .num { display: inline-block; width: 4ch; margin-right: 1.2ch; color: var(--muted); text-align: right; user-select: none; }
+
+@media (max-width: 480px) {
+  .row { flex-direction: column; }
+  .key-row { align-items: stretch; }
+}

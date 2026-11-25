@@ -13,10 +13,17 @@ import json
 import logging
 import math
 from contextlib import nullcontext
+from pathlib import Path
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.responses import (
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    StreamingResponse,
+)
+from fastapi.staticfiles import StaticFiles
 
 from cairn.generation.errors import LLMError
 from cairn.serve.cache import normalize_question
@@ -30,10 +37,46 @@ from cairn.serve.schemas import (
     SearchRequest,
     SearchResponse,
     answer_out,
+    make_ref,
 )
+from cairn.serve.source import SourceError, read_source
 from cairn.serve.state import FAILED
 
 log = logging.getLogger("cairn.serve")
+
+STATIC = Path(__file__).parent / "static"
+NO_MODEL = "no language model is attached to this server, so these are the retrieved passages"
+# The page loads only its own script and style and talks only to its own origin. Model output is
+# shown with textContent (never as HTML), and this header is the second line of defence.
+UI_CSP = (
+    "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; "
+    "img-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+)
+
+
+class SecurityHeaders:
+    """Adds the headers a browser needs to treat the page carefully. Pure ASGI."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        is_page = scope["path"] == "/" or scope["path"].startswith("/ui")
+
+        async def send_wrapper(message):
+            if message["type"] == "http.response.start":
+                headers = message.setdefault("headers", [])
+                headers.append((b"x-content-type-options", b"nosniff"))
+                headers.append((b"referrer-policy", b"no-referrer"))
+                if is_page:
+                    headers.append((b"content-security-policy", UI_CSP.encode()))
+                    headers.append((b"x-frame-options", b"DENY"))
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
 
 
 def sse(event, data):
@@ -73,6 +116,9 @@ def create_app(service, *, api_key=None, rate_limit=None, metrics=None, blocking
     limiter = RateLimiter(*rate_limit) if rate_limit else None
     app.state.limiter = limiter
     app.add_middleware(ObservabilityMiddleware, metrics=metrics)
+    app.add_middleware(SecurityHeaders)
+    if STATIC.is_dir():
+        app.mount("/ui", StaticFiles(directory=STATIC, html=True), name="ui")
 
     def gauge(name, read):
         def value():
@@ -130,12 +176,24 @@ def create_app(service, *, api_key=None, rate_limit=None, metrics=None, blocking
 
     EngineDep = Annotated[Engine, Depends(get_engine)]
 
+    @app.get("/", include_in_schema=False)
+    def root():
+        return RedirectResponse("/ui/")
+
     @app.get("/health")
     def health():
         # no key needed: a load balancer asks this. 503 until ready, so it holds traffic back.
         body = service.describe()
-        if service.ready and service.engine.live is not None:
-            body["index"] = service.engine.live.stats()
+        body["auth_required"] = api_key is not None
+        if service.ready:
+            engine = service.engine
+            body["mode"] = {
+                "retriever": engine.config.retriever,
+                "llm": engine.config.llm,
+                "model": engine.model,
+            }
+            if engine.live is not None:
+                body["index"] = engine.live.stats()
         return JSONResponse(body, status_code=200 if service.ready else 503)
 
     @app.get("/metrics")
@@ -159,6 +217,10 @@ def create_app(service, *, api_key=None, rate_limit=None, metrics=None, blocking
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             )
+        if engine.retrieval_only:
+            response = fallback(engine, req.question, None, stats, metrics, message=NO_MODEL)
+            record(metrics, stats, response)
+            return response
         k = engine.config.k
         cached, vector = lookup(engine, req.question, k, stats)
         if cached is not None:
@@ -172,6 +234,18 @@ def create_app(service, *, api_key=None, rate_limit=None, metrics=None, blocking
             remember(engine, req.question, k, response, vector)
         record(metrics, stats, response)
         return response
+
+    @app.get("/source")
+    def source(
+        engine: EngineDep,
+        path: Annotated[str, Query(min_length=1, max_length=300)],
+        start: Annotated[int, Query(ge=1)] = 1,
+        end: Annotated[int | None, Query(ge=1)] = None,
+    ):
+        try:
+            return read_source(engine.source_root, path, start, end)
+        except SourceError as exc:
+            raise HTTPException(exc.status, str(exc)) from exc
 
     @app.post("/ingest", status_code=202)
     def ingest(engine: EngineDep):
@@ -267,11 +341,14 @@ def remember(engine, question, k, response, vector):
         engine.semantic_cache.store(question, scope, response, vector)
 
 
-def fallback(engine, question, error, stats, metrics):
-    """The model failed: answer with what retrieval found, and say so."""
-    metrics.inc("cairn_llm_fallback_total")
+def fallback(engine, question, error, stats, metrics, *, message=None):
+    """No answer from the model (it failed, or none is attached): reply with what retrieval
+    found, and say so. A real failure is counted; "no model attached" is not a failure."""
+    if message is None:
+        metrics.inc("cairn_llm_fallback_total")
+        message = f"the language model failed: {error}"
+        log.warning("model failed, returning retrieved chunks: %s", error)
     stats.fallback = True
-    log.warning("model failed, returning retrieved chunks: %s", error)
     with stats.timed("retrieve"), slot(engine):
         hits = engine.retriever.search(question, engine.config.k)
     return AskResponse(
@@ -287,8 +364,9 @@ def fallback(engine, question, error, stats, metrics):
         cost_usd=0.0,
         latency_ms=0.0,
         degraded=True,
-        error=f"the language model failed: {error}",
+        error=message,
         chunks=[hit_out(h) for h in hits],
+        references=[make_ref(i, h) for i, h in enumerate(hits, 1)],
     )
 
 
@@ -303,6 +381,12 @@ def events(engine, question, stats, metrics):
     k = engine.config.k
     response = None
     try:
+        if engine.retrieval_only:
+            response = fallback(engine, question, None, stats, metrics, message=NO_MODEL)
+            chunks = [c.model_dump() for c in response.chunks]
+            yield sse("fallback", {"message": response.error, "chunks": chunks})
+            yield sse("done", response.model_dump())
+            return
         cached, vector = lookup(engine, question, k, stats)
         if cached is not None:
             response = cached

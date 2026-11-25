@@ -35,7 +35,7 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-cairn = ["generation/prompts/*.txt"]
+cairn = ["generation/prompts/*.txt", "serve/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

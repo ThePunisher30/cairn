@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cairn: ask the FastAPI docs and code</title>
+  <meta name="description" content="Questions about FastAPI answered from its docs and source, with citations you can open.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <h1>Cairn</h1>
+      <p class="tagline">Trail markers for code: ask about FastAPI 0.143.0, get passages you can check.</p>
+      <p id="status" class="status" role="status">Connecting...</p>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <form id="ask-form" autocomplete="off">
+      <label for="question">Your question</label>
+      <div class="row">
+        <input id="question" name="question" type="text" maxlength="2000" required
+               placeholder="How do I enable CORS?">
+        <button id="ask-button" type="submit">Ask</button>
+      </div>
+      <div id="key-row" class="row key-row" hidden>
+        <label for="api-key">API key</label>
+        <input id="api-key" type="password" autocomplete="off" placeholder="this server needs a key">
+      </div>
+      <div class="examples" aria-label="Example questions">
+        <span>Try:</span>
+        <button type="button" class="example">How do I enable CORS?</button>
+        <button type="button" class="example">What does the :path suffix in a path parameter do?</button>
+        <button type="button" class="example">Why does HTTP Basic auth use secrets.compare_digest?</button>
+        <button type="button" class="example">Which status codes have no response body?</button>
+      </div>
+    </form>
+
+    <section id="result" class="card" hidden aria-live="polite">
+      <p id="notice" class="notice" hidden></p>
+      <div id="answer" class="answer"></div>
+      <div id="refs" class="chips" aria-label="Sources"></div>
+      <ol id="passages" class="passages" hidden></ol>
+      <footer id="footer" class="meta"></footer>
+    </section>
+  </main>
+
+  <dialog id="viewer" aria-labelledby="viewer-title">
+    <div class="viewer-head">
+      <h2 id="viewer-title"></h2>
+      <a id="viewer-link" href="#" target="_blank" rel="noopener noreferrer">Open on GitHub</a>
+      <button id="viewer-close" type="button" aria-label="Close the source viewer">Close</button>
+    </div>
+    <p id="viewer-error" class="notice" hidden></p>
+    <pre id="viewer-code" class="code"></pre>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
