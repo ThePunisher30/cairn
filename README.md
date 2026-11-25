@@ -4,7 +4,18 @@ A from-scratch RAG engine over the [FastAPI](https://github.com/fastapi/fastapi)
 
 The point of the project is to understand every layer and to measure each choice, so every number below traces to a row in [`docs/results.md`](docs/results.md).
 
-**Status: Phases 0-9 of 11 are done.** Retrieval, generation, an agent loop and an HTTP service work and are measured. The demo UI and deployment are not built yet (see [Roadmap](#roadmap)).
+**Status: Phases 0-10 of 11 are done, except the last step of Phase 10: the public demo is built and tested locally but not deployed (see [Try it](#try-it)).** Retrieval, generation, an agent loop, an HTTP service with a web page, Docker and CI work and are measured (see [Roadmap](#roadmap)).
+
+## Try it
+
+A small page over the whole pipeline: type a question, see the answer stream in, click a citation to open the exact lines in a viewer. With no language model attached it shows the retrieved passages instead of an answer (that is also what a free public demo can do; see [`docs/deploy.md`](docs/deploy.md)).
+
+```bash
+docker compose up                      # then open http://localhost:8000 (retrieval only, 93 MiB of memory in a container)
+docker compose --profile llm up        # with a local model through Ollama, http://localhost:8001
+```
+
+or without Docker: `pip install -e ".[serve,llm]"`, `python scripts/fetch_corpus.py && python scripts/ingest.py`, then `python scripts/serve.py --llm none --retriever bm25 --no-auth`. **The public demo is not deployed yet**: it needs the author's own hosting account, and everything up to that step is prepared (`scripts/make_space.py`, [`docs/deploy.md`](docs/deploy.md)).
 
 ## Results so far
 
@@ -87,25 +98,28 @@ The multi-hop questions were drafted with an AI assistant, and one is ambiguous.
 - **The questions were drafted with AI assistance** from passages chosen with a helper script. Gold spans are checked by tests, and `scripts/question_overlap.py` reports how many of a question's words also appear in its answer passage, per category. Questions written after reading a passage tend to echo it somewhat, and 60 questions is a small set.
 - **Metrics:** hit@k, recall@k, MRR and nDCG@k, plus latency p50 and p95. Two baselines (random, first-N) and an oracle check that the harness can tell good from bad.
 
-## Architecture (built so far)
+## Architecture
 
-```
- FastAPI repo (pinned tag)
-        │  scripts/fetch_corpus.py
-        ▼
- loaders ─► chunkers (fixed / recursive / Markdown / Python AST) ─► data/chunks.jsonl
-                                                                         │
-                         ┌───────────────────────────────────────────────┤
-                         ▼                                               ▼
-              BM25: tokenizer ─► inverted index                 Embedder (bge-small) + disk cache
-              (heap top-k, pickle of a plain dict)              ─► flat index (.npz, brute-force top-k)
-                         │                                               │
-                         └──────────────► Retriever.search(query, k) ◄───┘
-                                                      │
-                                      evaluation harness: metrics, baselines, reports
+```mermaid
+flowchart TD
+    repo["FastAPI repo, pinned tag 0.143.0"] -->|scripts/fetch_corpus.py| chunkers["chunkers: Markdown headings + Python AST"]
+    chunkers --> chunks[("chunks.jsonl")]
+    chunks --> bm25["BM25: tokenizer + inverted index"]
+    chunks --> dense["embeddings (bge-small) + flat / IVF / HNSW index"]
+    bm25 --> hybrid["hybrid: min-max fusion (+ optional reranker)"]
+    dense --> hybrid
+    hybrid --> live["live index: tombstones, SQLite manifest, incremental re-index"]
+    live --> api["FastAPI service: /ask /search /ingest /source /health /metrics"]
+    api --> gen["generation: single-shot, or the agent loop with tools"]
+    gen --> llm["LLM client: Ollama or Anthropic, retries, circuit breaker"]
+    api --> ui["web page: streamed answer, citation chips, source viewer"]
+    hybrid -.-> eval["evaluation harness: metrics, baselines, reports"]
+    eval -.-> gate["CI retrieval gate on a small fixture corpus"]
 ```
 
-Every retriever has the same interface (`search(query, k) -> list[Hit]`), so the harness scores any of them the same way. The hybrid retriever (fusion of BM25 and dense) and the reranking wrapper take retrievers and have the same interface, so they stack: `RerankingRetriever(HybridRetriever([bm25, dense]), reranker)`. The context expander is applied to the hits afterwards.
+Every retriever has the same interface (`search(query, k) -> list[Hit]`), so the harness scores any of them the same way. The hybrid retriever (fusion of BM25 and dense) and the reranking wrapper take retrievers and have the same interface, so they stack: `RerankingRetriever(HybridRetriever([bm25, dense]), scorer)`. The service uses the same retrievers over a live index that can change while it runs.
+
+CI (`.github/workflows/ci.yml`) runs on every push and pull request: format and lint, the unit tests, the retrieval-regression gate (`scripts/ci_gate.py`: the real chunkers, BM25 and fusion on a 72-file fixture corpus with a hashing "embedding", deterministic and free, fails if hit@5 or MRR drops below `eval/ci_gate.json`), and a build of the demo Docker image that is then started and asked a question.
 
 ## Reproduce the numbers
 
@@ -129,9 +143,16 @@ python scripts/ablate_hybrid.py --expansion     # small-to-big expansion
 python scripts/list_failures.py --rerank --focus rrf+rerank   # where the gold passage ranks, per question
 ```
 
-Tests and lint: `pytest -q` (1,713 tests, 2 skipped, no network, model or paid key needed: the dense, reranking and agent tests use small offline stand-ins and a scripted model) and `ruff check .`.
+Tests and lint: `pytest -q` (1,754 tests, 2 skipped, no network, model or paid key needed: the dense, reranking and agent tests use small offline stand-ins and a scripted model) and `ruff check .`.
 
 ```bash
+# Phase 10 (the page is served by the service itself: open http://127.0.0.1:8000 after starting it)
+python scripts/ci_gate.py                       # the CI retrieval gate, about 2 s, no network
+python scripts/ci_gate.py --update              # print new thresholds (a deliberate, reviewed change)
+python scripts/make_ci_fixture.py               # rebuild tests/fixtures/ci_corpus from data/raw/fastapi
+docker build -t cairn-demo .                    # the public-demo image, BM25 only (add --build-arg WITH_DENSE=1)
+python scripts/make_space.py --out ../cairn-space   # the folder to push to a Hugging Face Space
+
 # Phase 9 (the service; --llm fake needs no model, a real model needs Ollama or an API key)
 CAIRN_API_KEY=a-long-secret-of-16-or-more python scripts/serve.py --llm ollama --model gemma4:e4b
 python scripts/serve.py --llm fake --no-auth --debug-blocking-route --port 8766   # for the load test
@@ -162,15 +183,19 @@ src/cairn/
   evaluation/   metrics, questions, baselines, harness, chunk-integrity metric, generation and agent evaluation
   generation/   LLM clients (Anthropic, Ollama) with retries, context packer, prompts, citations, abstention
   agent/        tool registry and the four corpus tools, the loop, budgets, traces
-  serve/        the HTTP service: API, live index, incremental indexing, caches, limits, metrics
-scripts/        one runnable script per task (ingest, build_index, embed_chunks, run_eval, ablations)
-eval/           questions.jsonl (data only) and failures/ (failure analyses)
-tests/          unit and script tests
+  serve/        the HTTP service: API, live index, incremental indexing, caches, limits, metrics,
+                the web page (serve/static) and the source viewer
+scripts/        one runnable script per task (ingest, build_index, embed_chunks, run_eval, serve, ci_gate, ablations)
+bench/          load test, tombstone cost, retrieval profile, ANN benchmarks
+eval/           questions.jsonl (data only), ci_gate.json (the CI thresholds) and failures/ (failure analyses)
+tests/          unit and script tests; fixtures/ci_corpus is a copy of 72 FastAPI files for the CI gate
+.github/        the CI workflow
+Dockerfile, docker-compose.yml   the image (data baked in at build) and the local stack
 docs/           results.md (every number), adr/ (decisions), notes/ (what I learned per phase), briefs/
 PLAN.md         the full 11-phase plan and its status
 ```
 
-Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md), [generation](docs/adr/0006-generation.md), [the agent loop](docs/adr/0007-agent-loop.md), [the service](docs/adr/0008-serving.md).
+Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md), [generation](docs/adr/0006-generation.md), [the agent loop](docs/adr/0007-agent-loop.md), [the service](docs/adr/0008-serving.md), [shipping](docs/adr/0009-shipping.md).
 
 ## Roadmap
 
@@ -186,7 +211,7 @@ Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM
 | 7 | Generation with citations and abstention, LLM client, generation eval | done |
 | 8 | Agent loop with tools, measured against single-shot | done |
 | 9 | FastAPI service: streaming, incremental indexing, caching, rate limiting, load test | done |
-| 10 | Frontend, Docker, CI with a retrieval-regression gate, deployment | planned |
+| 10 | Frontend, Docker, CI with a retrieval-regression gate, deployment | done, except that the public demo is not deployed |
 | 11 | Benchmark against LangChain / LlamaIndex and a vector database; write-up | planned |
 
 The details of each phase are in [`PLAN.md`](PLAN.md).
@@ -195,6 +220,6 @@ The details of each phase are in [`PLAN.md`](PLAN.md).
 
 This is a learning project built with an AI assistant (Claude) as tutor and pair: it wrote the phase briefs and the tests that each phase has to pass, helped with the implementation, and reviewed the code. The evaluation questions were drafted the same way (see above). The experiments, the measurements and the failure analyses are run on the real corpus, and the notes in `docs/notes/` record what each phase taught.
 
-In Phase 9 the implementation of the service (`src/cairn/serve/`, the load test, the benchmarks, the semantic-cache pairs) was also written by the assistant at the author's request, with its tests. In Phase 8 the implementation (the clients' tool support, the agent modules, the evaluation script) and the 15 multi-hop questions were written by the assistant at the author's request, with tests written first and checked against a reference solution and deliberately broken variants of it. The earlier phases were written by the author with the assistant as tutor.
+In Phase 10 the web page, the Docker and CI files, the retrieval gate and the deployment preparation were also written by the assistant at the author's request, with tests. In Phase 9 the implementation of the service (`src/cairn/serve/`, the load test, the benchmarks, the semantic-cache pairs) was also written by the assistant at the author's request, with its tests. In Phase 8 the implementation (the clients' tool support, the agent modules, the evaluation script) and the 15 multi-hop questions were written by the assistant at the author's request, with tests written first and checked against a reference solution and deliberately broken variants of it. The earlier phases were written by the author with the assistant as tutor.
 
 The Anthropic client (Phase 7) reads its key from the `ANTHROPIC_API_KEY` environment variable and the key is never in the code. All Phase 7, 8 and 9 numbers come from a local model or a fake one, so no key was used. The service takes its own API key only from `CAIRN_API_KEY`, never from the command line.
