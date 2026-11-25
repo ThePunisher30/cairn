@@ -26,7 +26,7 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: pyproject.toml
-      - name: Install (no torch: the dense tests use offline stand-ins)
+      - name: "Install (no torch, the dense tests use offline stand-ins)"
         run: python -m pip install -e ".[dev,serve,llm]"
       - name: Format and lint
         run: |
