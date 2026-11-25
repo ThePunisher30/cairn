@@ -943,3 +943,91 @@ By category (agent correct / single correct / questions): lexical 8 / 9 / 10, co
 - No trace of what each tool returned (only its size), so wasted calls cannot be counted exactly.
 - No hand grading of the agent's answers; no paid model; the 5 test questions of the multi-hop set.
 - No stronger judge, so the faithfulness numbers above should not be used.
+
+## Phase 9: serving (a FastAPI service with a live index)
+
+What was built: `src/cairn/serve/` (the API, a background-loading service, a live index with tombstones, a SQLite manifest and incremental re-indexing, an exact and a semantic answer cache, a token-bucket rate limiter, a concurrency limit, a circuit breaker with a chunks-only fallback, request ids, JSON logs and `/metrics`). The decisions are in `docs/adr/0008-serving.md`. In this phase the AI assistant wrote the implementation at the author's request, with about 130 new tests (checked by breaking the code on purpose and seeing a test fail).
+
+**Caveats for every number below.** One machine (a 12-core, 16-thread laptop CPU, Windows), with the load generator on the same machine as the server, so they compete for the same cores. The language model is a **fake that answers instantly**: a real local model needs about 40 s per answer here, which would measure the model and not the service, so nothing below says how the service behaves with a real model under load. Each load level ran 15 to 20 s, and repeated runs differ by 20% or more (shown as ranges where repeated). The server is one process.
+
+### Incremental indexing, shown on the real index
+
+The service loaded the real index (3,267 chunks, 671 files, `bge-small`) on a scratch copy of the corpus. At start it filled the manifest by re-chunking every file and checking the chunk ids against the index: 671 of 671 matched. Then three files were touched (two existing files got a new paragraph or function, and one new file was added) and `POST /ingest` was called:
+
+```
+reindex: 1 added, 2 changed, 0 removed, 669 unchanged; 3 chunks embedded, 42 reused; 42 tombstones; 0.81s
+```
+
+The three files produced 45 chunks. Only the **3 whose text was new** went through the embedding model; the other 42 reused the vector of an old chunk with the same text. The 669 other files were not read by the embedder, and a search for the new text found the new chunks at once. The same property is a unit test with a counting stand-in embedder (`tests/test_serve_indexer.py`: changing 3 of 10 files embeds only text from those 3, and an edit to one section embeds only that section). What this does **not** show is a re-index of files that changed a lot (all their chunks would be embedded), or the cost of the first start: the service took 16 to 23 s to become ready, and I did not break that down between loading the model, chunking 671 files for the manifest check and building the postings (building the live index alone takes 0.3 s).
+
+### What a tombstone costs (`bench/tombstone_cost.py`, real index, compaction off)
+
+| dead slots | alive | BM25 ms per query | dense ms per query |
+|---|---|---|---|
+| 0% | 3,267 | 3.08 | 0.22 |
+| 10% | 2,939 | 2.82 | 0.21 |
+| 25% | 2,450 | 2.41 | 0.21 |
+| 50% | 1,627 | 1.82 | 0.22 |
+| 75% | 816 | 1.18 | 0.30 |
+| after compaction (816 slots) | 816 | 0.76 | 0.05 |
+
+A tombstone makes search no slower than before, and not faster either. BM25 gets faster as fewer documents are alive (fewer postings match), but at 75% dead it still takes 1.5 times the 0.76 ms of an index compacted to the same documents, because the dead postings are still walked. The dense scan multiplies every slot, dead or not: it stayed at 0.2 ms while documents were removed, and is 6 times what the compacted index costs. Compaction took 42 ms under the write lock, during which searches wait. So the costs of a tombstone are memory, scanning wasted slots, and a pause when compaction runs. The threshold is 25% dead slots (and at least 50 of them). This is one run; the queries are the 40 dev questions and the dense query vectors are random.
+
+### The load test (`bench/load_test.py`, fake model)
+
+The first bottleneck was not the one I expected. One search spends about 35 ms embedding the query and 3 to 5 ms in BM25, and the server did not get faster with more users: about 12 requests/s from 5 to 20 users, with latency growing in proportion (queueing). `bench/profile_retrieval.py` showed that torch used all 12 threads for one tiny matrix product, so several requests at once fought over the same cores:
+
+| torch threads | 4 workers: searches/s | 20 workers: searches/s |
+|---|---|---|
+| 12 (torch's default) | 13 | 16 |
+| 4 | 20 to 24 | 16 to 18 |
+| 1 | 28 to 29 | 24 to 27 |
+
+These come from two runs of the profile script, which also showed that a single worker's rate varied from 13 to 36 per second between runs, so single-request speed is not shown to differ between settings. The fix is one line (`torch.set_num_threads(1)`, option `--torch-threads`). Through the whole service, three repeats of `/search`, 15 s per level:
+
+| | 5 users: requests/s | 5 users: p50 | 20 users: requests/s | 20 users: p50 | 20 users: p95 |
+|---|---|---|---|---|---|
+| 12 torch threads | 13.3 to 15.7 | 273 to 345 ms | 10.4 to 12.1 | 1,286 to 1,442 ms | 1,487 to 1,799 ms |
+| 1 torch thread | 20.5 to 23.6 | 184 to 210 ms | 18.2 to 20.3 | 825 to 944 ms | 1,226 to 1,546 ms |
+
+That is about **1.5 to 1.7 times the throughput** and a p50 about two thirds as long. A separate 20 s run of `/search` after the fix gave 16.9, 24.7 and 20.4 requests/s at 1, 5 and 20 users, with p50 47, 176 and 860 ms and p99 130, 422 and 1,418 ms. After the fix the ceiling is about 20 to 29 requests per second for one Python process: the BM25 scoring, the tokenizing and the fusion are pure Python and share one interpreter lock, so more threads cannot help. The next step would be several server processes, which was not done.
+
+`/ask` with the fake model, same run, at 1, 5 and 20 users: 18.6, 39.4 and 17.5 requests/s, p50 49, 130 and 885 ms. The 5-user rate is higher than `/search` got at 5 users, and I do not have an explanation beyond noise, so read the three numbers as "the same order as `/search`". An earlier `/ask` run (12 torch threads) showed a p50 of 22 ms at 5 users that I cannot explain and did not use. The very first `/ask` run also failed with 500 errors because the fake model has a built-in limit of 500 calls (a guard for tests); the service now lifts it.
+
+### Backpressure and the event loop
+
+- **Backpressure:** with at most 4 searches at once and a wait of up to 2 s for a slot, a 20-user `/ask` run (12 torch threads) refused 5 of 639 requests with `503` and `Retry-After`, and served the rest.
+- **The event loop (the checkpoint question):** the same retrieval as a plain `def` route against an `async def` route that calls it directly (`/debug/search-blocking`, present only with `--debug-blocking-route`), while another client called `GET /health` every 100 ms:
+
+| 20 users | `/health` p50 | `/health` max |
+|---|---|---|
+| plain `def` route (runs in a thread pool) | 5.4 ms | 38 ms |
+| blocking `async def` route | 622 ms | 1,422 ms |
+
+A unit test shows the same without a server: `/health` has to wait for the whole 0.4 s search when the route blocks, and answers in under 0.15 s when it does not.
+
+### The semantic cache does not separate "the same" from "similar" (`scripts/semantic_cache_eval.py`)
+
+15 hand-written paraphrases of dev questions (a cache hit is right) and 18 near-misses with almost the same words and a different meaning ("true" against "false", "enable" against "disable", "a body" against "no body"; a cache hit is wrong), measured by `bge-small` cosine similarity, dev questions only:
+
+| threshold | paraphrases hit | near-misses hit (false hits) |
+|---|---|---|
+| 0.88 | 14 of 15 | 17 of 18 |
+| 0.92 | 10 of 15 | 13 of 18 |
+| 0.94 | 7 of 15 | 10 of 18 |
+| 0.96 | 6 of 15 | 7 of 18 |
+| 0.98 | 5 of 15 | 2 of 18 |
+
+The paraphrases' median similarity is 0.93 and the near-misses' is 0.94, so **no threshold separates them**. Up to 0.96 more near-misses than paraphrases would be answered from the cache; only at 0.98 does the order flip, with 5 useful hits and 2 false hits. The worst pair, "accepted as 'true'" against "accepted as 'false'", has a similarity of 0.985. So the semantic cache is built, tested and **off by default** (`--semantic-cache`), while the exact cache (the same question after lowercasing and trimming) is on. These are small samples (15 and 18 pairs), one embedding model, and pairs written by one person who knew what a near-miss was; a different model or a second check could separate them better, which was not tried. The exact cache's hit rate in real traffic was not measured, because there is no real traffic.
+
+### The model being down
+
+This is tested with a scripted model, not with a real outage. A failing model gives `200` with `degraded: true`, the retrieved chunks and the error, and is never cached. A streaming request that fails before its first token gets a `fallback` event and then `done`; after the first token it ends with an `error` event. After 3 failures in a row the circuit opens and the model is not called for 30 s (a test counts 2 model calls for 5 requests with a breaker that opens after 2 failures). Stopping a real Ollama was not tried.
+
+### Not done
+
+- No load test with a real model, none above 20 users, none with the load generator on another machine, and no multi-process server.
+- The service uses the flat dense index and the Python inverted index. The approximate indexes from Phase 4 (IVF, HNSW) are not in the service, so HNSW's own deletion problem (removing a node from a graph) was never met; the tombstones here are for the flat matrix and the postings.
+- No reranker in the service (hybrid only). One shared API key, no TLS. Rate limits and caches live in the process, so a restart loses them and several processes would not share them. The rate-limit identity is the client address (behind a proxy it needs `--proxy-headers`).
+- `/ingest` re-scans the corpus folder; it does not fetch a new version of the repository.
+- Concurrent streaming was tested with a mock HTTP transport (two streams each reading their own token counts), not with two real model calls.

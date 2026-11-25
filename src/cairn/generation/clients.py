@@ -1,3 +1,4 @@
+import copy
 import json
 import time
 
@@ -69,6 +70,10 @@ class AnthropicClient:
         self.effort = effort
         self.sdk = sdk
         self.last_usage = None
+
+    def fork(self):
+        """A copy for one request: own `last_usage`, shared SDK client (see OllamaClient.fork)."""
+        return copy.copy(self)
 
     def _request(self, system, messages, max_tokens, tools=None):
         request = {
@@ -171,6 +176,11 @@ class OllamaClient:
         self.think = think
         self.client = client
         self.last_usage = None
+
+    def fork(self):
+        """A copy for one request: it shares the HTTP client (which is thread-safe) but has its
+        own `last_usage`, so two requests at once cannot read each other's token counts."""
+        return copy.copy(self)
 
     def _body(self, system, messages, max_tokens, stream, tools=None):
         body = {

@@ -4,7 +4,7 @@ A from-scratch RAG engine over the [FastAPI](https://github.com/fastapi/fastapi)
 
 The point of the project is to understand every layer and to measure each choice, so every number below traces to a row in [`docs/results.md`](docs/results.md).
 
-**Status: Phases 0-8 of 11 are done.** Retrieval, generation and an agent loop work and are measured. Serving and the demo are not built yet (see [Roadmap](#roadmap)).
+**Status: Phases 0-9 of 11 are done.** Retrieval, generation, an agent loop and an HTTP service work and are measured. The demo UI and deployment are not built yet (see [Roadmap](#roadmap)).
 
 ## Results so far
 
@@ -70,6 +70,16 @@ The model gets four tools (`search`, `read_chunk`, `read_file`, `list_symbols`) 
 
 The multi-hop questions were drafted with an AI assistant, and one is ambiguous. The failures are classified in [`eval/failures/phase8.md`](eval/failures/phase8.md).
 
+### Service (Phase 9)
+
+`python scripts/serve.py` runs a FastAPI service over the same pipeline: `POST /ask` (JSON, or server-sent events with `"stream": true`), `POST /search`, `POST /ingest` (a background re-index job), `GET /health`, `GET /metrics`. It listens at once and loads in the background (`/health` is `503` until ready), has an API key (from `CAIRN_API_KEY`), a rate limit, a concurrency limit, a circuit breaker that falls back to returning the retrieved chunks when the model is down, request ids, JSON logs and Prometheus metrics. Measured with a **fake model** on one machine, the load generator sharing it:
+
+- **Incremental indexing:** changing 3 files of 671 re-embedded 3 of the 45 new chunks (the other 42 reused vectors) and took 0.81 s; deleted chunks become tombstones and are compacted past 25% dead slots. A tombstone does not slow search, but the dense scan still pays for dead slots (6 times the cost at 75% dead) and compaction pauses searches (42 ms here).
+- **The first bottleneck** was torch using every core for one tiny query, so concurrent requests fought each other: one thread per call gave **1.5 to 1.7 times the throughput** (about 20 searches/s at 20 users instead of 12). One Python process tops out at 20 to 29 searches/s.
+- **The event loop:** the same search as a blocking `async def` route made `/health` answer in 622 ms (median) at 20 users, against 5.4 ms for a plain `def` route.
+- **The semantic cache is off:** on 15 paraphrases and 18 near-misses no similarity threshold separates "the same question" from "a similar one" (medians 0.93 and 0.94). The exact cache is on.
+- **Not measured:** the service with a real model under load, more than one process, a real outage. See [`docs/results.md`](docs/results.md), "Phase 9", and [ADR 0008](docs/adr/0008-serving.md).
+
 ## How it is evaluated
 
 - **60 questions** about FastAPI in four categories (lexical, semantic, multi-chunk, code lookup), 15 each, split into 40 dev and 20 test questions. The test split is frozen: it is run twice in the whole project (once after Phase 6, done; once at the end) and `run_eval.py` and `ablate_hybrid.py` refuse it without `--use-test-set`. All tuning is done on the dev questions.
@@ -119,9 +129,17 @@ python scripts/ablate_hybrid.py --expansion     # small-to-big expansion
 python scripts/list_failures.py --rerank --focus rrf+rerank   # where the gold passage ranks, per question
 ```
 
-Tests and lint: `pytest -q` (1,580 tests, 2 skipped, no network, model or paid key needed: the dense, reranking and agent tests use small offline stand-ins and a scripted model) and `ruff check .`.
+Tests and lint: `pytest -q` (1,713 tests, 2 skipped, no network, model or paid key needed: the dense, reranking and agent tests use small offline stand-ins and a scripted model) and `ruff check .`.
 
 ```bash
+# Phase 9 (the service; --llm fake needs no model, a real model needs Ollama or an API key)
+CAIRN_API_KEY=a-long-secret-of-16-or-more python scripts/serve.py --llm ollama --model gemma4:e4b
+python scripts/serve.py --llm fake --no-auth --debug-blocking-route --port 8766   # for the load test
+python bench/load_test.py --endpoint search --users 1 5 20 --duration 20
+python bench/tombstone_cost.py
+python bench/profile_retrieval.py
+python scripts/semantic_cache_eval.py
+
 # Phase 8 (needs Ollama running with gemma4:e4b; the first call loads the model)
 python scripts/multihop_coverage.py                                  # is one search enough? (dev only)
 python scripts/agent_eval.py --mode agent  --set multihop --llm ollama --model gemma4:e4b
@@ -144,6 +162,7 @@ src/cairn/
   evaluation/   metrics, questions, baselines, harness, chunk-integrity metric, generation and agent evaluation
   generation/   LLM clients (Anthropic, Ollama) with retries, context packer, prompts, citations, abstention
   agent/        tool registry and the four corpus tools, the loop, budgets, traces
+  serve/        the HTTP service: API, live index, incremental indexing, caches, limits, metrics
 scripts/        one runnable script per task (ingest, build_index, embed_chunks, run_eval, ablations)
 eval/           questions.jsonl (data only) and failures/ (failure analyses)
 tests/          unit and script tests
@@ -151,7 +170,7 @@ docs/           results.md (every number), adr/ (decisions), notes/ (what I lear
 PLAN.md         the full 11-phase plan and its status
 ```
 
-Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md), [generation](docs/adr/0006-generation.md), [the agent loop](docs/adr/0007-agent-loop.md).
+Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md), [generation](docs/adr/0006-generation.md), [the agent loop](docs/adr/0007-agent-loop.md), [the service](docs/adr/0008-serving.md).
 
 ## Roadmap
 
@@ -166,7 +185,7 @@ Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM
 | 6 | Hybrid retrieval (rank fusion), cross-encoder reranking, small-to-big expansion; first run of the test split | done |
 | 7 | Generation with citations and abstention, LLM client, generation eval | done |
 | 8 | Agent loop with tools, measured against single-shot | done |
-| 9 | FastAPI service: streaming, incremental indexing, caching, rate limiting, load test | planned |
+| 9 | FastAPI service: streaming, incremental indexing, caching, rate limiting, load test | done |
 | 10 | Frontend, Docker, CI with a retrieval-regression gate, deployment | planned |
 | 11 | Benchmark against LangChain / LlamaIndex and a vector database; write-up | planned |
 
@@ -176,6 +195,6 @@ The details of each phase are in [`PLAN.md`](PLAN.md).
 
 This is a learning project built with an AI assistant (Claude) as tutor and pair: it wrote the phase briefs and the tests that each phase has to pass, helped with the implementation, and reviewed the code. The evaluation questions were drafted the same way (see above). The experiments, the measurements and the failure analyses are run on the real corpus, and the notes in `docs/notes/` record what each phase taught.
 
-In Phase 8 the implementation (the clients' tool support, the agent modules, the evaluation script) and the 15 multi-hop questions were written by the assistant at the author's request, with tests written first and checked against a reference solution and deliberately broken variants of it. The earlier phases were written by the author with the assistant as tutor.
+In Phase 9 the implementation of the service (`src/cairn/serve/`, the load test, the benchmarks, the semantic-cache pairs) was also written by the assistant at the author's request, with its tests. In Phase 8 the implementation (the clients' tool support, the agent modules, the evaluation script) and the 15 multi-hop questions were written by the assistant at the author's request, with tests written first and checked against a reference solution and deliberately broken variants of it. The earlier phases were written by the author with the assistant as tutor.
 
-The Anthropic client (Phase 7) reads its key from the `ANTHROPIC_API_KEY` environment variable and the key is never in the code. All Phase 7 and Phase 8 numbers come from a local model, so no key was used.
+The Anthropic client (Phase 7) reads its key from the `ANTHROPIC_API_KEY` environment variable and the key is never in the code. All Phase 7, 8 and 9 numbers come from a local model or a fake one, so no key was used. The service takes its own API key only from `CAIRN_API_KEY`, never from the command line.

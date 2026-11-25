@@ -31,6 +31,7 @@ A from-scratch RAG engine over a real codebase and its docs. Retrieval, indexing
 - **Phase 5 note:** the flat index is only 5.0 MB for this corpus and scans in 0.9 ms, while embedding the question takes 38.5 ms alone (measured separately; the eval's p50 of 112 ms is higher and unexplained), so ANN cannot fix the per-query latency at this size. Measure the scan time and the embedding time separately in `bench/ann.py`. The plan below still stands: use the flat index as the exact answer, and a larger scale set so ANN has something to prove.
 - **Phase 6 note:** the case for fusion was measured before the phase (at rank 1 each retriever alone gets 0.600, and at least one of them gets 0.775), but the dev advantage of fusion over dense was not statistically established and did not reproduce on the test split. The first of the two test runs is used (`eval/test_set_runs.log`); one is left for Phase 11. Five dev labels have a second passage that also answers the question and were kept (`eval/failures/phase6.md`).
 - **Phase 7 note:** ADR 0005 makes hybrid min-max the default retriever. Because dense alone did better on test, the generation evaluation on the dev questions should also report dense alone, so the retriever choice can be revisited on dev evidence and never on the test split. A reranker costs about 3 s per question and is off by default.
+- **Phase 9 note:** done with a fake model for the load test (a real local model takes about 40 s per answer, which would measure the model). The assistant wrote the implementation at the author's request. Findings: one torch thread per query gave 1.5 to 1.7 times the throughput; a blocking `async def` route made `/health` take 622 ms at 20 users against 5.4 ms; the semantic cache is off because no threshold separates paraphrases from near-misses (medians 0.93 and 0.94); changing 3 of 671 files embedded 3 of 45 new chunks in 0.81 s. Not done: a real model under load, several processes, the ANN indexes in the service, a real outage (`docs/results.md`, ADR 0008).
 - **Phase 8 note:** done with the same local model; the agent did not beat single-shot (multi-hop 4 of 10 against 4 of 9, single-hop 23 against 29 of 40, p = 0.24) and used 1.8 to 2.7 times the tokens, so single-shot stays the default. The assistant wrote the Phase 8 implementation and the 15 multi-hop questions at the author's request (`docs/results.md`, ADR 0007). Still open: a second agent run, an `agent_v2` prompt that forces a first search, a larger model, a stronger judge, the 5 test multi-hop questions (Phase 11).
 - **Phase 7 note:** done with one local model (`gemma4:e4b`, Ollama) because of the zero-cost constraint; the Anthropic client is built and tested but was never run. The judge is the same model and is unreliable on faithfulness (`docs/results.md`). Dense against hybrid as the generation retriever was settled on a judge-free context measure (a tie), not a generation run. Still open: a stronger judge, an abstain threshold run end to end, `answer_v2`, context order, and any paid-model comparison. Phase 8 will need a model that follows tool-use formats; `gemma4:e4b` has not been tried for that.
 - **Open questions from Phase 4**, not investigated: why the query prefix matters only for `structure-300`; whether the 83 chunks over the model's 512-token limit cost anything on the dev questions; why a first embedding run was slower than the benchmark predicted.
@@ -332,7 +333,7 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 
 ---
 
-### Phase 9: Serving and production concerns (7–9 days)
+### Phase 9: Serving and production concerns (7–9 days) — DONE
 **Goal:** a service that behaves under load, can be updated, and can be debugged.
 
 **You write**
@@ -418,7 +419,7 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 | 6 | Hybrid and rerank | 5–6 | 8 | planned |
 | 7 | Generation | 6–8 | 9.5 | planned |
 | 8 | Agent loop | 5–7 | 11 | planned |
-| 9 | Serving and production | 7–9 | 13 | planned |
+| 9 | Serving and production | 7–9 | 13 | done |
 | 10 | Frontend, CI, deploy | 5–7 | 14.5 | planned |
 | 11 | Framework benchmark and write-up | 4–5 | 15.5 | planned |
 

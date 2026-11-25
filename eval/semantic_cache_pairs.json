@@ -1,0 +1,139 @@
+{
+ "_note": "Hand-written pairs over dev questions only. A paraphrase should hit a semantic cache; a near-miss (almost the same words, another meaning) must not.",
+ "paraphrases": [
+  [
+   "q004",
+   "Which class replaces OAuth2PasswordRequestForm when I want to require the grant_type field?"
+  ],
+  [
+   "q008",
+   "What HTTP status code does RedirectResponse default to?"
+  ],
+  [
+   "q010",
+   "Which parameter sets the default response class for all path operations of an app or router?"
+  ],
+  [
+   "q013",
+   "Which two classes must an Enum inherit from so the docs treat predefined path values as strings?"
+  ],
+  [
+   "q014",
+   "What is the effect of adding :path to a path parameter like {file_path:path}?"
+  ],
+  [
+   "q017",
+   "What spellings in a URL count as true for a boolean parameter?"
+  ],
+  [
+   "q020",
+   "If two middlewares are registered in sequence, which of them sees the incoming request first?"
+  ],
+  [
+   "q026",
+   "How do I disable the interactive docs pages in a production deployment without changing the code?"
+  ],
+  [
+   "q029",
+   "Which command generates a secure random secret key for signing access tokens?"
+  ],
+  [
+   "q031",
+   "Which HTTP status codes make FastAPI send a response without a body?"
+  ],
+  [
+   "q032",
+   "How does FastAPI build the default unique operation ID for a route?"
+  ],
+  [
+   "q044",
+   "In the example where one dependency uses another, what comes back if no query value is sent?"
+  ],
+  [
+   "q052",
+   "Which decorator is used to register a handler for a custom exception class, and which app method does it call?"
+  ],
+  [
+   "q053",
+   "How can I register a function as HTTP middleware, and what does the decorator do with it?"
+  ],
+  [
+   "q059",
+   "How can I put routes in a different module and attach them to the main app?"
+  ]
+ ],
+ "near_misses": [
+  [
+   "q004",
+   "Which class should replace OAuth2PasswordRequestForm if I want to make the grant_type field optional?"
+  ],
+  [
+   "q010",
+   "Which parameter sets the response class used by default for a single path operation?"
+  ],
+  [
+   "q011",
+   "What object does the HTTPBearer security scheme give to the path operation, and what does it contain?"
+  ],
+  [
+   "q013",
+   "Which two classes should an Enum for predefined path values inherit from so the docs treat the values as integers?"
+  ],
+  [
+   "q014",
+   "What does the :int suffix in a path parameter such as {item_id:int} do?"
+  ],
+  [
+   "q017",
+   "Which spellings in the URL are accepted as 'false' for a boolean option?"
+  ],
+  [
+   "q019",
+   "When should I use the framework's built-in way of doing work after sending the reply instead of a dedicated job queue?"
+  ],
+  [
+   "q020",
+   "When I register two middlewares one after another, which one handles the outgoing response first?"
+  ],
+  [
+   "q026",
+   "How can I turn on the interactive documentation pages in production without editing the code?"
+  ],
+  [
+   "q031",
+   "For which HTTP status codes does FastAPI decide that a response must have a body?"
+  ],
+  [
+   "q032",
+   "How is the default unique operation ID of a websocket route assembled?"
+  ],
+  [
+   "q038",
+   "What error does HTTPBasic raise when the decoded credentials contain a colon?"
+  ],
+  [
+   "q043",
+   "In the example that overrides both exception handlers, what type of response does the RequestValidationError handler return?"
+  ],
+  [
+   "q044",
+   "In the example where one dependency uses another, what is returned when a query value is sent?"
+  ],
+  [
+   "q047",
+   "How can I make HTTPException errors come back as JSON, and what does FastAPI's default HTTPException handler send?"
+  ],
+  [
+   "q052",
+   "Which decorator registers a handler for a built-in exception class, and which app method does that decorator call?"
+  ],
+  [
+   "q053",
+   "How do you register a function as a WebSocket middleware, and what does the decorator actually do with the function?"
+  ],
+  [
+   "q059",
+   "How do you declare routes in a separate module and detach them from the main application?"
+  ]
+ ]
+}
