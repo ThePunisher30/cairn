@@ -1036,7 +1036,7 @@ This is tested with a scripted model, not with a real outage. A failing model gi
 
 What was built: `src/cairn/serve/static/` (the page), `GET /source`, retrieval-only (`--llm none`) and BM25-only (`--retriever bm25`) modes, the `Dockerfile` and `docker-compose.yml`, `.github/workflows/ci.yml`, `scripts/ci_gate.py` with `tests/fixtures/ci_corpus` and `eval/ci_gate.json`, and `scripts/make_space.py` with `docs/deploy.md`. The decisions are in `docs/adr/0009-shipping.md`. In this phase the AI assistant wrote all of it at the author's request, with tests.
 
-**What was and was not run.** The container was built and run here (Docker Desktop on Windows). The CI commands (format, lint, tests, the gate) were run here in a clean copy of the repository with no `data/` and no torch. **The workflow file itself has never run on GitHub, and nothing is deployed.**
+**What was and was not run.** The container was built and run here (Docker Desktop on Windows). The CI commands (format, lint, tests, the gate) were run here in a clean copy of the repository with no `data/` and no torch. **The workflow ran on GitHub: the first run on GitHub failed at once with a YAML error (an unquoted colon in a step name; fixed), and the next run (run 45697992667, on pull request 14) passed both jobs. Nothing is deployed.** In that passing run (Ubuntu runner, about 1 min 10 s for the checks job and 30 s for the image job): 1,750 tests passed and 6 skipped, the gate printed the same numbers as on Windows (BM25 hit@5 0.775, MRR 0.703; hybrid hit@5 0.775, MRR 0.612), and the image job built the demo image, started it and got `cors.md` from `/search` and the page from `/ui/`.
 
 ### The retrieval-regression gate
 
@@ -1081,5 +1081,5 @@ Checked in Chrome (a screen capture, the console and scripted interaction): the 
 ### Not done
 
 - **No deployment, no demo GIF, no live link in the README.** The deployment needs the author's hosting account; `docs/deploy.md` and `scripts/make_space.py` prepare it. The free tier of the planned host was reported inconsistent (see `docs/deploy.md`).
-- The CI workflow has not run on GitHub; the actions are pinned to commits looked up on the day, which may need updating.
+- The actions are pinned to commits looked up on the day, which will need updating when they are replaced.
 - The gate uses dev questions and a stand-in for the embedding model; nothing here runs the real model in CI.

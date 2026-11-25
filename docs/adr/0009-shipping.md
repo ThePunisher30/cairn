@@ -1,7 +1,7 @@
 # ADR 0009: A page served by the API, a retrieval-only public demo, an image built from the pinned corpus, and a CI gate on a deterministic fixture
 
 Status: accepted, 2026-11-26. Evidence: `docs/results.md` (section "Phase 10"), `docs/deploy.md`.
-The gate and the image were run on this machine; **the CI workflow was never run on GitHub** (it can only be run by a push), and **the public demo was not deployed** (it needs the author's hosting account). Section "What I would not trust" says where that matters.
+The gate and the image were run on this machine; **the CI workflow ran on GitHub once after a fix** (the first run failed on a YAML error, the second passed both jobs), and **the public demo was not deployed** (it needs the author's hosting account). Section "What I would not trust" says where that matters.
 
 ## Context
 
@@ -38,7 +38,7 @@ Phase 10 makes the project something a stranger can run and trust: a page to use
 
 ## What I would not trust
 
-- **That CI passes on GitHub.** The same commands were run here in a clean copy of the repository (no `data/`, no torch), and the image was built and run here, but the workflow file itself has never executed. The first push will show.
+- **That CI stays green.** It passed once, on pull request 14, after a first run failed on a YAML mistake that my local checks had not caught (they ran the commands, not the workflow file). On the Linux runner 1,750 tests passed (6 skipped, against 1,749 passed and 7 skipped in my Windows run: platform-dependent tests) and the gate printed the same numbers as on Windows, which supports its determinism across the two systems.
 - **The gate as a measure of quality.** It uses the 40 dev questions the project was tuned on, a small fixture and a weak dense model.
 - **The page beyond one browser and one session.** It was checked in Chrome only, by one person's tooling, with no automated script tests and no accessibility audit.
 - **The demo's availability.** It is not deployed, and the free hosting tier was reported inconsistent when checked (see `docs/deploy.md`).
@@ -46,6 +46,6 @@ Phase 10 makes the project something a stranger can run and trust: a page to use
 
 ## Consequences
 
-- The first push of this branch is the first run of the workflow; fix what it finds before trusting the badge.
+- Pull requests now run the workflow; a red run blocks nothing automatically (no branch protection is configured), so the merge decision is still a person's.
 - Changing a chunker, the tokenizer, BM25 or fusion now needs either no change in the gate numbers or an `--update` in the same pull request, with the reason written down.
 - Phase 11 (the comparison with the frameworks) can start the same containers for a fair timing of end-to-end requests.

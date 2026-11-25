@@ -1,6 +1,6 @@
 # Phase 10: checkpoint notes
 
-The numbers come from `docs/results.md`, section "Phase 10". The CI workflow was never run on GitHub (only its commands, here, in a clean copy of the repository), and the public demo was not deployed.
+The numbers come from `docs/results.md`, section "Phase 10". The CI workflow ran on GitHub (the first run failed on a YAML error, the second passed both jobs), and the public demo was not deployed.
 
 > **Draft:** these answers were drafted with the assistant from the measurements, and in this phase the assistant also wrote the page, the Docker and CI files and the gate. The brief asks for answers in my own words, so each one should be rewritten in my words (keeping the numbers) before the notes count as mine.
 
