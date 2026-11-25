@@ -205,11 +205,15 @@ def test_ask_reports_an_abstention():
     assert body["citations"] == []
 
 
-def test_a_failing_language_model_is_502_not_a_crash():
+def test_a_failing_language_model_gives_the_retrieved_chunks_not_a_crash():
     client = client_for(ready_service(make_engine(FakeLLM([ServerError("overloaded")]))))
     response = client.post("/ask", json={"question": "x?"})
-    assert response.status_code == 502
-    assert "overloaded" in response.json()["detail"]
+    assert response.status_code == 200
+    body = response.json()
+    assert body["degraded"] is True and body["answer"] == ""
+    assert "overloaded" in body["error"]
+    assert [c["path"] for c in body["chunks"]] == ["docs/cors.md", "docs/a.md"]
+    assert body["sources"][0] == "[1] docs/cors.md:1-5"
     assert client.get("/health").status_code == 200  # the service is still up
 
 
@@ -252,13 +256,26 @@ def test_a_token_with_a_newline_stays_inside_its_event():
     assert "line one\nline two" in streamed
 
 
-def test_a_failure_during_the_stream_ends_with_an_error_event_and_no_done():
+def test_a_model_failure_before_the_first_token_streams_a_fallback_then_done():
     client = client_for(ready_service(make_engine(FakeLLM([ServerError("overloaded")]))))
     response = client.post("/ask", json={"question": "x?", "stream": True})
     assert response.status_code == 200  # the status was sent before the failure
+    events = parse_events(response.text)
+    assert [name for name, _ in events] == ["fallback", "done"]
+    assert len(events[0][1]["chunks"]) == 2
+    assert events[1][1]["degraded"] is True
+
+
+def test_a_failure_after_the_first_token_ends_with_an_error_event_and_no_done():
+    from cairn.generation.fake import Partial
+
+    llm = FakeLLM([Partial("Use CORS", ServerError("connection dropped"))])
+    response = client_for(ready_service(make_engine(llm))).post(
+        "/ask", json={"question": "x?", "stream": True}
+    )
     names = [name for name, _ in parse_events(response.text)]
-    assert names == ["error"]
-    assert "overloaded" in parse_events(response.text)[0][1]["message"]
+    assert names[-1] == "error" and "done" not in names and "token" in names
+    assert "connection dropped" in parse_events(response.text)[-1][1]["message"]
 
 
 def test_an_unexpected_failure_in_the_stream_hides_the_details():

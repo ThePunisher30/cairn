@@ -41,6 +41,10 @@ class AskResponse(BaseModel):
     output_tokens: int
     cost_usd: float
     latency_ms: float
+    cached: str | None = None  # "exact" or "semantic" when it came from a cache
+    degraded: bool = False  # the model failed: `chunks` holds what was retrieved instead
+    error: str | None = None
+    chunks: list[HitOut] = []
 
 
 def answer_out(answer):

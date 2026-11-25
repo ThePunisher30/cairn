@@ -60,6 +60,10 @@ class FakeLLM:
         self.calls: list[dict] = []
         self.last_usage: Usage | None = None
 
+    def fork(self):
+        """A fake is shared as it is (its scripted replies are one queue, for the whole test)."""
+        return self
+
     def _next(self, system, messages):
         # A responder that always answers never runs dry, so code that forgot to stop (a loop
         # without a budget check) would hang the test suite. This turns the hang into a failure.

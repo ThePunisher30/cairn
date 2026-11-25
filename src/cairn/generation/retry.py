@@ -120,6 +120,11 @@ class RetryingClient:
     def last_usage(self):
         return self._inner.last_usage
 
+    def fork(self):
+        """A copy for one request, with its own `last_usage` and retry count."""
+        inner = self._inner.fork() if hasattr(self._inner, "fork") else self._inner
+        return RetryingClient(inner, self._policy, sleep=self._sleep, rng=self._rng)
+
     def _count_retry(self, attempt, error, delay):
         self.retries += 1
 
