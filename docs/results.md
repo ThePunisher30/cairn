@@ -898,26 +898,26 @@ The agent used **2.7 times the tokens and 2.6 times the estimated cost** for the
 
 ### The 40 single-hop dev questions (the control), agent against single-shot
 
-`python scripts/agent_eval.py --mode agent|single --set dev ...`. **The single-shot run stopped at 37 of 40** (the system killed it for low memory; q056, q058 and q059 were not run in single mode and were not restarted). The comparison below uses the 37 questions both modes finished; the agent ran all 40 (23 correct, 0.575, Wilson 95% interval about 0.42 to 0.71).
+`python scripts/agent_eval.py --mode agent|single --set dev ...`. Both modes ran all 40 questions. (The single-shot run was first killed twice by the system for low memory and stopped at 37; q056, q058 and q059 were then run with `--resume`, which skips finished questions, with the same settings. The first draft of this section used the 37 paired questions; the numbers below are the full 40.)
 
-| measure (37 paired questions) | single-shot | agent |
+| measure (40 paired questions) | single-shot | agent |
 |---|---|---|
-| correctness | 27 of 37 (0.730; Wilson 0.57 to 0.85) | 21 of 37 (0.568; Wilson 0.41 to 0.71) |
-| both right / agent only / single only / both wrong | 16 / 5 (q007, q031, q043, q047, q055) / 11 (q001, q005, q016, q017, q019, q022, q023, q025, q028, q035, q038) / 5 | |
-| paired difference (agent - single) | -0.162, bootstrap 95% [-0.351, +0.054] | |
-| exact sign test (5 against 11) | p = 0.21 | |
-| faithfulness (not comparable) | 0.833 | 0.706 |
-| evidence seen | 0.811 | 0.568 |
+| correctness | 29 of 40 (0.725; Wilson 0.57 to 0.84) | 23 of 40 (0.575; Wilson 0.42 to 0.71) |
+| both right / agent only / single only / both wrong | 17 / 6 (q007, q031, q043, q047, q055, q059) / 12 (q001, q005, q016, q017, q019, q022, q023, q025, q028, q035, q038, q058) / 5 | |
+| paired difference (agent - single) | -0.150, bootstrap 95% [-0.350, +0.050] | |
+| exact sign test (6 against 12) | p = 0.24 | |
+| faithfulness (not comparable) | 0.795 | 0.676 |
+| evidence seen | 0.787 | 0.562 |
 | refusals | 1 | 3 |
-| searches / tool calls / model calls per question | 1.0 / 0 / 1.0 | 1.05 / 1.43 / 2.43 |
-| input / output tokens per question | 1,546 / 77 | 2,834 / 111 |
-| latency p50 / p95 (answering only) | 44 s / 63 s | 38 s / 67 s |
-| estimated cost per question (opus prices) | $0.0077 | $0.0136 |
+| searches / tool calls / model calls per question | 1.0 / 0 / 1.0 | 1.07 / 1.45 / 2.45 |
+| input / output tokens per question | 1,542 / 78 | 2,866 / 116 |
+| latency p50 / p95 (answering only) | 44 s / 63 s | 39 s / 70 s |
+| estimated cost per question (opus prices) | $0.0077 | $0.0138 |
 
-By category (agent correct / single correct / questions): lexical 8 / 9 / 10, code 6 / 6 / 10, multi_chunk 5 / 3 / 7, **semantic 2 / 9 / 10**.
+By category (agent correct / single correct / questions): lexical 8 / 9 / 10, code 6 / 6 / 10, multi_chunk 7 / 5 / 10, **semantic 2 / 9 / 10**.
 
-- **On questions that need one lookup the agent was worse, not equal**: 6 fewer correct answers out of 37, in the direction against it, but with p = 0.21 and an interval that includes zero, so this run does not show a real difference. The gap is almost all in the semantic category (2 of 10 against 9 of 10; all 7 discordant pairs go against the agent, exact sign test p = 0.016, but that is one of four categories looked at after the fact, so about 0.06 after correcting for four, and it is a subgroup chosen after seeing the data).
-- **Run-to-run noise of single-shot:** today's single-shot run and the Phase 7 run (same model, settings and judge) gave the same verdict on 35 of 37 questions and 27 against 29 correct, so single-shot itself moves by about two questions between runs. The agent was run once on each set, so its noise is not measured.
+- **On questions that need one lookup the agent was worse, not equal**: 6 fewer correct answers out of 40, in the direction against it, but with p = 0.24 and an interval that includes zero, so this run does not show a real difference. The gap is almost all in the semantic category (2 of 10 against 9 of 10; all 7 discordant pairs go against the agent, exact sign test p = 0.016, but that is one of four categories looked at after the fact, so about 0.06 after correcting for four, and it is a subgroup chosen after seeing the data).
+- **Run-to-run noise of single-shot:** today's single-shot run and the Phase 7 run (same model, settings and judge) gave the same verdict on 38 of 40 questions and 29 against 31 correct, so single-shot itself moves by about two questions between runs. The agent was run once on each set, so its noise is not measured.
 
 ### What the agent did (82 tool calls over 50 runs)
 
@@ -933,13 +933,12 @@ By category (agent correct / single correct / questions): lexical 8 / 9 / 10, co
 - **5 of 50 runs made no tool call** (m04, q019, q022, q025, q035): the model answered or refused at step 1 with no evidence, against the prompt's "search before you answer". All five counted as incorrect; single-shot got all five right.
 - **The agent never used `read_file` or `list_symbols`**, including when a chunk stopped just before the answer (m07) or the needed code was in a file it never opened (m10).
 - **3 searches used `path_filter`, all in q005, all with invented paths (`examples/security`, `examples`, `security`), and all returned "No results."** The correct paths start with `docs/en/docs/`, `fastapi/` or `docs_src/`.
-- **Evidence seen on the single-hop set:** 0.568 for the agent, 0.811 for single-shot. For the 11 questions only single-shot got right, the agent saw all gold spans in 3 and none in 8, single-shot all of them in 11. The agent writes its own query (for example "stop api description from rebuilding docs" for a question that never uses those words); single-shot searches with the question text. That is a candidate explanation for the semantic gap. **It was not tested** (it would take a run where the first search is the question text).
+- **Evidence seen on the single-hop set:** 0.562 for the agent, 0.787 for single-shot. For the 12 questions only single-shot got right, the agent saw all gold spans in 3 and none in 9; single-shot saw all of them in 11 and half in one (q058). The agent writes its own query (for example "stop api description from rebuilding docs" for a question that never uses those words); single-shot searches with the question text. That is a candidate explanation for the semantic gap. **It was not tested** (it would take a run where the first search is the question text).
 - **Error handling and budgets were never exercised by the real model:** no tool errors, no repeats, no run longer than 6 of 8 steps. Their evidence is the unit tests with the scripted `FakeLLM` (300 random runs never exceed a budget), not this experiment.
 
 ### Not done
 
 - The agent was **run once per set**: no repeat to measure its own noise (a tool-calling model is not deterministic).
-- **q056, q058, q059** single-shot (stopped for low memory, not restarted).
 - No prompt change after the first run (`agent_v2`), no test of "the first search is the question text", no `num_ctx` check (the largest single prompt was 2,413 tokens, far below Ollama's 4,096 default, so truncation is not suspected).
 - No trace of what each tool returned (only its size), so wasted calls cannot be counted exactly.
 - No hand grading of the agent's answers; no paid model; the 5 test questions of the multi-hop set.

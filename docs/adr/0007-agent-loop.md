@@ -1,7 +1,7 @@
 # ADR 0007: A hand-written agent loop with hard budgets, errors as messages, and single-shot as the default
 
 Status: accepted, 2026-11-25. Evidence: `docs/results.md`, section "Phase 8"; `eval/failures/phase8.md`.
-Every comparison below is one local model (`gemma4:e4b`), one run per set, a judge that is the same model, 10 multi-hop questions and 37 paired single-hop questions, so the claims are narrow. Section "What I would not trust" says where.
+Every comparison below is one local model (`gemma4:e4b`), one run per set, a judge that is the same model, 10 multi-hop questions and 40 paired single-hop questions, so the claims are narrow. Section "What I would not trust" says where.
 
 ## Context
 
@@ -32,18 +32,18 @@ Phase 8 lets the model decide what to look up. It gets four tools (`search`, `re
 ## Alternatives measured
 
 - **Agent against single-shot, multi-hop (10 dev questions):** 4 of 10 against 4 of 9 graded, 2.7 times the tokens and about 2.6 times the estimated paid-model cost. Neither is better at this sample size.
-- **Agent against single-shot, single-hop (37 paired dev questions):** 21 against 27 correct (-0.16, interval [-0.35, +0.05], p = 0.21); semantic questions 2 of 10 against 9 of 10; 1.8 times the tokens. Single-shot moves by about 2 questions between runs.
+- **Agent against single-shot, single-hop (40 paired dev questions):** 23 against 29 correct (-0.15, interval [-0.35, +0.05], p = 0.24); semantic questions 2 of 10 against 9 of 10; 1.8 times the tokens. Single-shot moves by about 2 questions between runs.
 - **Not measured:** a second agent run (its own noise), `agent_v2` (a prompt that forces a first search), the first search being the question text, a larger or paid model.
 
 ## Trade-offs
 
 - **Flexibility against cost and predictability:** the agent can run a second search that depends on the first (m02 got the exception handler's status code that way), and it costs 2 to 3 times the tokens and 2 to 3.4 model calls instead of 1. On a CPU the latency was similar (about 40 s p50 for both), because one long single-shot prompt is slow too; on a paid API the extra calls and tokens are money.
-- **The model chooses the query, and that can be worse than the question.** On single-hop questions the agent's own rewrite saw the gold span in far fewer cases than searching with the question text (0.57 against 0.81). Giving the model the choice is only worth it when the question needs a choice.
+- **The model chooses the query, and that can be worse than the question.** On single-hop questions the agent's own rewrite saw the gold span in far fewer cases than searching with the question text (0.56 against 0.79). Giving the model the choice is only worth it when the question needs a choice.
 - **Honest partial answers against abstention:** several wrong agent answers say what the chunks lack instead of replying `CANNOT_ANSWER`. That is better than a confident wrong answer, and the judge marks it wrong either way.
 
 ## What I would not trust
 
-- **Any claim that the agent is worse or better.** Ten multi-hop pairs (4 against 4) and 37 single-hop pairs (p = 0.21) cannot separate them, the agent was run once, and the judge is the same small model whose verdict moved 17.5 points with its prompt wording in Phase 7. The semantic-category gap (p about 0.06 after correcting for four categories) was found after the fact.
+- **Any claim that the agent is worse or better.** Ten multi-hop pairs (4 against 4) and 40 single-hop pairs (p = 0.24) cannot separate them, the agent was run once, and the judge is the same small model whose verdict moved 17.5 points with its prompt wording in Phase 7. The semantic-category gap (p about 0.06 after correcting for four categories) was found after the fact.
 - **Faithfulness numbers:** the judge sees different context in the two modes.
 - **The multi-hop set as a benchmark:** 15 questions drafted with an assistant, one ambiguous (m08), references not independently checked, and 9 of 10 dev questions were not solved by one search, so the set is hard for retrieval in a way that may not favour an agent.
 - **"The error handling works"**: the real model never triggered a tool error, a repeat or a budget stop. Only the scripted tests did.
