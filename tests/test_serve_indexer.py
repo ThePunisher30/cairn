@@ -142,6 +142,9 @@ def test_changing_three_files_embeds_only_chunks_of_those_files(setup, caplog):
     indexer, live, manifest, embedder, root, _ = setup
     indexer.reindex()
     embedder.texts.clear()
+    paths = [f"docs/en/docs/page{i}.md" for i in (2, 5, 7)]
+    old = sum(len(live.chunks_of(path)) for path in paths)  # whatever the chunk size is
+    before = live.n_alive
     changed = {f"docs/en/docs/page{i}.md": f"# Page {i}\n\nrewritten{i} " * 40 for i in (2, 5, 7)}
     write_corpus(root, changed)
     with caplog.at_level(logging.INFO, logger="cairn.serve.indexer"):
@@ -150,9 +153,9 @@ def test_changing_three_files_embeds_only_chunks_of_those_files(setup, caplog):
     assert report.unchanged == 7
     assert report.embedded == len(embedder.texts) > 0
     assert all("rewritten" in text for text in embedder.texts)  # nothing from the other 7 files
-    assert report.chunks_removed == 12 and live.n_dead == 12  # 3 files x 4 chunks
+    assert report.chunks_removed == old and live.n_dead == old > 0
     assert any("3 changed" in r.message and "7 unchanged" in r.message for r in caplog.records)
-    assert live.n_alive == 7 * 4 + report.chunks_added
+    assert live.n_alive == before - old + report.chunks_added
 
 
 def test_searches_see_the_new_text_and_not_the_old(setup):
