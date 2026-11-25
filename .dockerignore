@@ -1,0 +1,17 @@
+.git
+.github
+.gitignore
+.dockerignore
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.venv
+learn
+data
+docs
+bench
+tests
+eval/*
+!eval/llm_prices.json
+*.png

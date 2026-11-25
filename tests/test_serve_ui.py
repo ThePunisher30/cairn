@@ -229,3 +229,11 @@ def test_the_semantic_cache_needs_the_embedding_model(tmp_path):
 def test_an_unknown_retriever_is_refused(tmp_path):
     with pytest.raises(ValueError, match="retriever"):
         build_engine(EngineConfig(data_dir=tmp_path, retriever="magic"))
+
+
+def test_the_page_files_share_one_metrics_label(tmp_path):
+    client = client_for(tmp_path)
+    for path in ("/ui/", "/ui/app.js", "/ui/style.css"):
+        client.get(path)
+    text = client.get("/metrics").text
+    assert 'route="/ui",status="200"} 3' in text and "app.js" not in text

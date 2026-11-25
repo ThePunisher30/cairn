@@ -1,0 +1,65 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# the workflow only reads the repository; nothing here needs a token with more rights
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: lint, tests, retrieval gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # actions are pinned to a commit, not a tag a maintainer could move (the comment says which)
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install (no torch: the dense tests use offline stand-ins)
+        run: python -m pip install -e ".[dev,serve,llm]"
+      - name: Format and lint
+        run: |
+          ruff format --check .
+          ruff check .
+      - name: Unit tests
+        run: pytest -q
+      # Fails the build if retrieval got worse even though every unit test passes. Deterministic,
+      # CPU only, no model download, no API cost: see scripts/ci_gate.py and eval/ci_gate.json.
+      - name: Retrieval regression gate
+        run: python scripts/ci_gate.py
+
+  image:
+    name: the Docker image builds and answers
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Build the demo image (BM25 only; nothing is pushed anywhere)
+        run: docker build -t cairn-demo .
+      - name: Run it and ask it a question
+        run: |
+          docker run -d --name cairn -p 8000:8000 cairn-demo
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" localhost:8000/health || true)
+            [ "$code" = "200" ] && break
+            sleep 2
+          done
+          curl -sf localhost:8000/health
+          curl -sf -X POST localhost:8000/search -H 'content-type: application/json' \
+            -d '{"query": "how to enable CORS", "k": 3}' | grep -q 'cors.md'
+          curl -sf localhost:8000/ui/ | grep -q '<title>Cairn'
+      - name: Container log
+        if: always()
+        run: docker logs cairn || true
