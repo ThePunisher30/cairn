@@ -123,9 +123,10 @@ class RetryingClient:
     def _count_retry(self, attempt, error, delay):
         self.retries += 1
 
-    def complete(self, system, messages, *, max_tokens=1024):
+    def complete(self, system, messages, *, max_tokens=1024, tools=None):
+        extra = {} if tools is None else {"tools": tools}
         return call_with_retries(
-            lambda: self._inner.complete(system, messages, max_tokens=max_tokens),
+            lambda: self._inner.complete(system, messages, max_tokens=max_tokens, **extra),
             self._policy,
             sleep=self._sleep,
             rng=self._rng,

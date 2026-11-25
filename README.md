@@ -4,7 +4,7 @@ A from-scratch RAG engine over the [FastAPI](https://github.com/fastapi/fastapi)
 
 The point of the project is to understand every layer and to measure each choice, so every number below traces to a row in [`docs/results.md`](docs/results.md).
 
-**Status: Phases 0-7 of 11 are done.** Retrieval and generation work and are measured. The agent loop, serving and the demo are not built yet (see [Roadmap](#roadmap)).
+**Status: Phases 0-8 of 11 are done.** Retrieval, generation and an agent loop work and are measured. Serving and the demo are not built yet (see [Roadmap](#roadmap)).
 
 ## Results so far
 
@@ -59,6 +59,17 @@ One local model (`gemma4:e4b` through Ollama, $0), hybrid retriever, k = 5, 40 a
 
 The failures are classified in [`eval/failures/phase7.md`](eval/failures/phase7.md).
 
+### Agent loop (Phase 8), dev only
+
+The model gets four tools (`search`, `read_chunk`, `read_file`, `list_symbols`) and a hand-written loop with hard budgets (8 steps, 30,000 tokens, 600 s) runs what it asks for. Compared with single-shot on the same questions, model, retriever and judge: one local model (`gemma4:e4b`, $0), each mode run once, so read these as a first measurement.
+
+- **Multi-hop (10 dev questions, 15 written, 5 test never run):** correct 4 of 10 for the agent, 4 of 9 graded for single-shot. No difference at this size. The agent used **2.7 times the tokens** (about 2.6 times the estimated paid-model cost). One search on the question text finds every hop for only 1 of the 10 questions.
+- **Single-hop control (40 questions):** the agent got 23 right and single-shot 29 (p = 0.24, so not shown to be a real gap), mostly on semantic questions (2 of 10 against 9 of 10).
+- **What the traces showed:** 5 of 50 agent runs made no tool call at all; it never used `read_file` or `list_symbols`; it rewrote questions into queries that found less of the gold evidence (0.56 against 0.79). No tool errors, repeated calls or budget stops happened with the real model, so those mechanisms are tested only with a scripted model (300 random runs never exceed a budget).
+- **Not done:** a second agent run, a better prompt, a larger model, a stronger judge. Single-shot stays the default.
+
+The multi-hop questions were drafted with an AI assistant, and one is ambiguous. The failures are classified in [`eval/failures/phase8.md`](eval/failures/phase8.md).
+
 ## How it is evaluated
 
 - **60 questions** about FastAPI in four categories (lexical, semantic, multi-chunk, code lookup), 15 each, split into 40 dev and 20 test questions. The test split is frozen: it is run twice in the whole project (once after Phase 6, done; once at the end) and `run_eval.py` and `ablate_hybrid.py` refuse it without `--use-test-set`. All tuning is done on the dev questions.
@@ -108,7 +119,17 @@ python scripts/ablate_hybrid.py --expansion     # small-to-big expansion
 python scripts/list_failures.py --rerank --focus rrf+rerank   # where the gold passage ranks, per question
 ```
 
-Tests and lint: `pytest -q` (825 tests, 1 skipped, no network or model download needed: the dense and reranking tests use small offline stand-in models) and `ruff check .`.
+Tests and lint: `pytest -q` (1,580 tests, 2 skipped, no network, model or paid key needed: the dense, reranking and agent tests use small offline stand-ins and a scripted model) and `ruff check .`.
+
+```bash
+# Phase 8 (needs Ollama running with gemma4:e4b; the first call loads the model)
+python scripts/multihop_coverage.py                                  # is one search enough? (dev only)
+python scripts/agent_eval.py --mode agent  --set multihop --llm ollama --model gemma4:e4b
+python scripts/agent_eval.py --mode single --set multihop --llm ollama --model gemma4:e4b
+python scripts/agent_eval.py --mode agent  --set dev      --llm ollama --model gemma4:e4b --resume
+```
+
+Both `agent_eval.py` modes accept `--llm fake` to run end to end with no model. The Phase 8 paired statistics come from a one-off script that is not in the repository; `docs/results.md` says so.
 
 The ablation scripts behind the tables in `docs/results.md` are `scripts/compare_chunkers.py`, `scripts/ablate_bm25.py`, `scripts/ablate_dense.py`, `scripts/bench_search.py`, `scripts/bench_embed.py`, `scripts/eval_ann.py` and `scripts/ablate_hybrid.py`. A few Phase 6 numbers (rerank depth, the time breakdown, truncation, the paired statistics) come from one-off scripts that are not in the repository; `docs/results.md` says which.
 
@@ -120,7 +141,9 @@ src/cairn/
   retrieval/    tokenizer, inverted index, BM25, fusion, hybrid retriever, reranker, context expander
   dense/        embedder, embedding cache, flat index, dense retriever, model registry
   ann/          k-means, IVF and HNSW indexes
-  evaluation/   metrics, questions, baselines, harness, chunk-integrity metric
+  evaluation/   metrics, questions, baselines, harness, chunk-integrity metric, generation and agent evaluation
+  generation/   LLM clients (Anthropic, Ollama) with retries, context packer, prompts, citations, abstention
+  agent/        tool registry and the four corpus tools, the loop, budgets, traces
 scripts/        one runnable script per task (ingest, build_index, embed_chunks, run_eval, ablations)
 eval/           questions.jsonl (data only) and failures/ (failure analyses)
 tests/          unit and script tests
@@ -128,7 +151,7 @@ docs/           results.md (every number), adr/ (decisions), notes/ (what I lear
 PLAN.md         the full 11-phase plan and its status
 ```
 
-Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md), [generation](docs/adr/0006-generation.md).
+Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md), [generation](docs/adr/0006-generation.md), [the agent loop](docs/adr/0007-agent-loop.md).
 
 ## Roadmap
 
@@ -142,7 +165,7 @@ Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM
 | 5 | Approximate nearest-neighbour indexes (k-means, IVF, HNSW) from scratch | done |
 | 6 | Hybrid retrieval (rank fusion), cross-encoder reranking, small-to-big expansion; first run of the test split | done |
 | 7 | Generation with citations and abstention, LLM client, generation eval | done |
-| 8 | Agent loop with tools | next |
+| 8 | Agent loop with tools, measured against single-shot | done |
 | 9 | FastAPI service: streaming, incremental indexing, caching, rate limiting, load test | planned |
 | 10 | Frontend, Docker, CI with a retrieval-regression gate, deployment | planned |
 | 11 | Benchmark against LangChain / LlamaIndex and a vector database; write-up | planned |
@@ -153,4 +176,6 @@ The details of each phase are in [`PLAN.md`](PLAN.md).
 
 This is a learning project built with an AI assistant (Claude) as tutor and pair: it wrote the phase briefs and the tests that each phase has to pass, helped with the implementation, and reviewed the code. The evaluation questions were drafted the same way (see above). The experiments, the measurements and the failure analyses are run on the real corpus, and the notes in `docs/notes/` record what each phase taught.
 
-The Anthropic client (Phase 7) reads its key from the `ANTHROPIC_API_KEY` environment variable and the key is never in the code. All Phase 7 numbers come from a local model, so no key was used.
+In Phase 8 the implementation (the clients' tool support, the agent modules, the evaluation script) and the 15 multi-hop questions were written by the assistant at the author's request, with tests written first and checked against a reference solution and deliberately broken variants of it. The earlier phases were written by the author with the assistant as tutor.
+
+The Anthropic client (Phase 7) reads its key from the `ANTHROPIC_API_KEY` environment variable and the key is never in the code. All Phase 7 and Phase 8 numbers come from a local model, so no key was used.

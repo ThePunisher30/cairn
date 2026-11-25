@@ -845,3 +845,101 @@ Nine of the 40 answerable questions were wrong under both judge prompts (`eval/f
 ### How the judge numbers could change the conclusions
 
 Trusting the hand grading instead of the judge would not change any retrieval conclusion (those used no judge). It would change the faithfulness number (the hand rate is 14 of 15, the `v1` judge's 0.763), and it would put correctness on this 15-answer sample at 10 of 15 against the judge's 12 of 15. With 15 answers these differences are within chance, so the safe reading is a correctness of roughly 0.6 to 0.8 for this system, with retrieval, not the prompt, as the main cap.
+
+
+## Phase 8: an agent loop against single-shot RAG
+
+The agent (`src/cairn/agent/`) lets the model decide what to look up: it gets four tools (`search`, `read_chunk`, `read_file`, `list_symbols`), and a loop runs the tools it asks for and gives back the results, until it answers or a budget (steps, tokens, time) runs out. This section compares it with the single-shot pipeline of Phase 7 on the same questions, with the same model, retriever and judge. The test split was not touched, and the 5 test questions of the new multi-hop set were never run.
+
+**One model, one run each, small sets.** `gemma4:e4b` through Ollama 0.40.17 on a laptop CPU, thinking off, hybrid min-max retriever, k = 5 per search, judge `judge_v1` (the same small model). Single-shot: prompt `answer_v1`, 1,500-token context, one retrieval, one model call. Agent: prompt `agent_v1`, budget 8 steps / 30,000 tokens / 600 s, up to 4 tool calls per step, chunk snippets of 400 characters in search results. Cost is $0 (local model); the "estimated cost" rows price the same tokens as `claude-opus-5-5` from `eval/llm_prices.json` ($4 / $20 per million tokens, prices dated 2026-10-06 and not re-checked). Numbers were produced in November 2026.
+
+**Who wrote the code.** In Phase 8 the agent modules, the client tool support, the evaluation script and the 15 multi-hop questions were written by the AI assistant at the author's request (the earlier phases were written by the author with the assistant as tutor). The tests were written first and checked against a reference solution and deliberately broken variants of it.
+
+Added in this phase: `src/cairn/agent/{budget,trace,tools,loop}.py`, tool-call support in `generation/{clients,retry,types,fake}.py`, `generation/prompts/agent_v1.txt`, `evaluation/agent.py`, `scripts/agent_eval.py`, `scripts/multihop_coverage.py`, `eval/multihop_questions.jsonl`. Run files are in `data/agent_runs/` (ignored by git), so the per-question rows and traces are not in the repository. The paired statistics below come from a one-off script (`agent_compare.py`, kept in the session scratchpad, not in the repository).
+
+### Caveats that apply to every number
+
+1. **The same small model answers and judges.** Phase 7 showed `judge_v1` is lenient on correctness and unreliable on faithfulness, and that changing the wording of the judge prompt moved correctness by 17.5 points. In this phase the judge's written reasons did not always match the answer (m09 and m10 in `eval/failures/phase8.md`). A difference of one or two questions is not evidence.
+2. **The judge sees different context in the two modes.** Single-shot: the packed context (up to 1,500 tokens). Agent: only the chunks the answer cites, capped at 1,500 tokens. So faithfulness is **not comparable** between the two rows; correctness is judged against the reference and is.
+3. **A run that ends without an answer counts as incorrect**, and a refusal to an answerable question counts as incorrect (as in Phase 7).
+4. **Latency is the answering call(s) only** (p95 by nearest rank). The judge call that follows each answer is not included; it roughly doubled the real time per question.
+5. **The multi-hop questions and references were drafted with an AI assistant** and checked only by reading the cited lines. One (m08) is ambiguous (see below).
+
+### The multi-hop set: is it really multi-hop?
+
+`eval/multihop_questions.jsonl` has 15 questions (10 dev, 5 test), each with two or three gold spans (one per hop): a docs passage that names a class or setting, and the source lines where it is defined. `python scripts/multihop_coverage.py` asks the hybrid retriever once with the question text, top 5, and checks which hops are overlapped by a returned chunk (dev only):
+
+| result | value |
+|---|---|
+| dev questions with every hop found by one search | **1 of 10** (m04) |
+| hops found by one search | 7 of 21 |
+
+So one search on the question text is not enough for 9 of 10 questions: the set is hard for single-shot by construction, which is also why it is not a fair test of the agent (a question the retriever cannot reach for the question text may be unreachable for the agent's own queries too).
+
+### Multi-hop dev questions (10), agent against single-shot
+
+`python scripts/agent_eval.py --mode agent|single --set multihop --llm ollama --model gemma4:e4b`
+
+| measure | single-shot | agent |
+|---|---|---|
+| correctness | 4 of 9 graded (0.444) (one judge reply could not be read, m10) | 4 of 10 (0.400) |
+| both right / agent only / single only / both wrong | 2 / 2 (m02, m03) / 2 (m04, m07) / 3 (m01, m08, m09), on the 9 questions graded in both | |
+| exact sign test, 9 pairs | p = 1.0 | |
+| faithfulness (judge `v1`, not comparable) | 0.571 | 0.667 |
+| evidence seen (share of gold spans overlapped by a chunk the model saw) | 0.350 | 0.400 |
+| refusals (`CANNOT_ANSWER`) | 2 | 1 |
+| searches / tool calls / model calls per question | 1.0 / 0 / 1.0 | 1.3 / 2.4 / 3.4 |
+| input / output tokens per question | 1,648 / 62 | 4,560 / 118 |
+| latency p50 / p95 (answering only) | 40 s / 54 s | 41 s / 69 s |
+| estimated cost per question (opus prices) | $0.0078 | $0.0206 |
+| stop reasons | 8 answered, 2 abstained | 10 answered |
+
+The agent used **2.7 times the tokens and 2.6 times the estimated cost** for the same number of correct answers, within the noise of 9 pairs (a paired bootstrap of the difference gives [-0.44, +0.44]). Where it won (m02, m03) a second lookup or a full read of a chunk found the second fact; where it lost (m04, m07) it did not search at all (m04) or read a chunk that stopped just before the answer (m07).
+
+### The 40 single-hop dev questions (the control), agent against single-shot
+
+`python scripts/agent_eval.py --mode agent|single --set dev ...`. Both modes ran all 40 questions. (The single-shot run was first killed twice by the system for low memory and stopped at 37; q056, q058 and q059 were then run with `--resume`, which skips finished questions, with the same settings. The first draft of this section used the 37 paired questions; the numbers below are the full 40.)
+
+| measure (40 paired questions) | single-shot | agent |
+|---|---|---|
+| correctness | 29 of 40 (0.725; Wilson 0.57 to 0.84) | 23 of 40 (0.575; Wilson 0.42 to 0.71) |
+| both right / agent only / single only / both wrong | 17 / 6 (q007, q031, q043, q047, q055, q059) / 12 (q001, q005, q016, q017, q019, q022, q023, q025, q028, q035, q038, q058) / 5 | |
+| paired difference (agent - single) | -0.150, bootstrap 95% [-0.350, +0.050] | |
+| exact sign test (6 against 12) | p = 0.24 | |
+| faithfulness (not comparable) | 0.795 | 0.676 |
+| evidence seen | 0.787 | 0.562 |
+| refusals | 1 | 3 |
+| searches / tool calls / model calls per question | 1.0 / 0 / 1.0 | 1.07 / 1.45 / 2.45 |
+| input / output tokens per question | 1,542 / 78 | 2,866 / 116 |
+| latency p50 / p95 (answering only) | 44 s / 63 s | 39 s / 70 s |
+| estimated cost per question (opus prices) | $0.0077 | $0.0138 |
+
+By category (agent correct / single correct / questions): lexical 8 / 9 / 10, code 6 / 6 / 10, multi_chunk 7 / 5 / 10, **semantic 2 / 9 / 10**.
+
+- **On questions that need one lookup the agent was worse, not equal**: 6 fewer correct answers out of 40, in the direction against it, but with p = 0.24 and an interval that includes zero, so this run does not show a real difference. The gap is almost all in the semantic category (2 of 10 against 9 of 10; all 7 discordant pairs go against the agent, exact sign test p = 0.016, but that is one of four categories looked at after the fact, so about 0.06 after correcting for four, and it is a subgroup chosen after seeing the data).
+- **Run-to-run noise of single-shot:** today's single-shot run and the Phase 7 run (same model, settings and judge) gave the same verdict on 38 of 40 questions and 29 against 31 correct, so single-shot itself moves by about two questions between runs. The agent was run once on each set, so its noise is not measured.
+
+### What the agent did (82 tool calls over 50 runs)
+
+| | multi-hop (10 runs) | dev (40 runs) |
+|---|---|---|
+| tool calls | 24 (13 `search`, 11 `read_chunk`) | 58 (43 `search`, 15 `read_chunk`) |
+| `read_file`, `list_symbols` | **0, 0** | **0, 0** |
+| tool errors / repeated calls | 0 / 0 | 0 / 0 |
+| searches per run (0 / 1 / 2 / 3) | 1 / 5 / 4 / 0 | 4 / 30 / 5 / 1 |
+| model calls per run | 1 to 6 (most 3) | 1 to 4 (most 2) |
+| budget stops (steps, tokens, time) | 0 | 0 |
+
+- **5 of 50 runs made no tool call** (m04, q019, q022, q025, q035): the model answered or refused at step 1 with no evidence, against the prompt's "search before you answer". All five counted as incorrect; single-shot got all five right.
+- **The agent never used `read_file` or `list_symbols`**, including when a chunk stopped just before the answer (m07) or the needed code was in a file it never opened (m10).
+- **3 searches used `path_filter`, all in q005, all with invented paths (`examples/security`, `examples`, `security`), and all returned "No results."** The correct paths start with `docs/en/docs/`, `fastapi/` or `docs_src/`.
+- **Evidence seen on the single-hop set:** 0.562 for the agent, 0.787 for single-shot. For the 12 questions only single-shot got right, the agent saw all gold spans in 3 and none in 9; single-shot saw all of them in 11 and half in one (q058). The agent writes its own query (for example "stop api description from rebuilding docs" for a question that never uses those words); single-shot searches with the question text. That is a candidate explanation for the semantic gap. **It was not tested** (it would take a run where the first search is the question text).
+- **Error handling and budgets were never exercised by the real model:** no tool errors, no repeats, no run longer than 6 of 8 steps. Their evidence is the unit tests with the scripted `FakeLLM` (300 random runs never exceed a budget), not this experiment.
+
+### Not done
+
+- The agent was **run once per set**: no repeat to measure its own noise (a tool-calling model is not deterministic).
+- No prompt change after the first run (`agent_v2`), no test of "the first search is the question text", no `num_ctx` check (the largest single prompt was 2,413 tokens, far below Ollama's 4,096 default, so truncation is not suspected).
+- No trace of what each tool returned (only its size), so wasted calls cannot be counted exactly.
+- No hand grading of the agent's answers; no paid model; the 5 test questions of the multi-hop set.
+- No stronger judge, so the faithfulness numbers above should not be used.
