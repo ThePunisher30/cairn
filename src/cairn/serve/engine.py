@@ -60,5 +60,5 @@ def build_engine(cfg):
 
 
 def warm_up(engine):
-    """One search so lazy loading (the embedder, the first matrix multiply) happens before a user."""
+    """One search, so lazy loading (the embedder, the first multiply) happens before a user."""
     engine.retriever.search("how do I declare a path parameter", 1)
