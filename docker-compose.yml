@@ -1,0 +1,40 @@
+# docker compose up                    the service with retrieval only (no model) on http://localhost:8000
+# docker compose --profile llm up      the service with a local model through Ollama
+#                                      (then once: docker compose exec ollama ollama pull gemma4:e4b)
+#
+# Both bind to 127.0.0.1 only and have no API key: they are for your own machine. To expose the
+# service anywhere else, drop --no-auth and set CAIRN_API_KEY (16+ characters) instead.
+services:
+  cairn:
+    build:
+      context: .
+      target: runtime
+      args:
+        WITH_DENSE: "0"   # "1": hybrid search with the embedding model (a much bigger image)
+    image: cairn:local
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: ["--llm", "none", "--no-auth"]
+
+  cairn-llm:
+    profiles: ["llm"]
+    build:
+      context: .
+      target: runtime
+      args:
+        WITH_DENSE: "0"
+    image: cairn:local
+    ports:
+      - "127.0.0.1:8001:8000"
+    command: ["--llm", "ollama", "--ollama-url", "http://ollama:11434", "--model", "gemma4:e4b", "--no-auth"]
+    depends_on:
+      - ollama
+
+  ollama:
+    profiles: ["llm"]
+    image: ollama/ollama
+    volumes:
+      - ollama:/root/.ollama
+
+volumes:
+  ollama:

@@ -232,7 +232,9 @@ class ObservabilityMiddleware:
         finally:
             seconds = time.perf_counter() - began
             route = scope.get("route")
-            path = getattr(route, "path", None) or "unmatched"  # bounded label values only
+            path = getattr(route, "path", None)  # bounded label values only
+            if path is None:
+                path = "/ui" if scope["path"].startswith("/ui") else "unmatched"
             self.metrics.inc("cairn_requests_total", route=path, status=status["code"])
             self.metrics.observe("cairn_request_seconds", seconds, route=path)
             access_log.info(

@@ -298,13 +298,15 @@ class LiveIndex:
         import os
 
         chunks, vectors = self.snapshot()
-        chunks_path, dense_path = Path(chunks_path), Path(dense_path)
+        chunks_path = Path(chunks_path)
         tmp_chunks = chunks_path.with_suffix(chunks_path.suffix + ".tmp")
-        tmp_dense = dense_path.with_suffix(".tmp.npz")
+        tmp_dense = Path(dense_path).with_suffix(".tmp.npz") if dense_path is not None else None
         write_jsonl(tmp_chunks, (dataclasses.asdict(c) for c in chunks))
-        FlatIndex(vectors, [c.id for c in chunks]).save(tmp_dense)
+        if dense_path is not None:  # None: BM25 only, there is no dense index to keep
+            FlatIndex(vectors, [c.id for c in chunks]).save(tmp_dense)
         os.replace(tmp_chunks, chunks_path)
-        os.replace(tmp_dense, dense_path)
+        if dense_path is not None:
+            os.replace(tmp_dense, dense_path)
 
 
 class LiveBM25:

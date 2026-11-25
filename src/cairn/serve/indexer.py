@@ -118,7 +118,7 @@ class Indexer:
 
             # the files first, the manifest last: a crash in between leaves a manifest that is
             # behind the index, and the next re-index simply redoes those files
-            if self.chunks_path is not None and self.dense_path is not None:
+            if self.chunks_path is not None:
                 self.live.save(self.chunks_path, self.dense_path)
             self.manifest.apply(
                 upserts=[(p, hash_text(by_path[p].text), len(new[p])) for p in new],

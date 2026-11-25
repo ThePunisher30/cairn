@@ -35,14 +35,16 @@ dev = [
 where = ["src"]
 
 [tool.setuptools.package-data]
-cairn = ["generation/prompts/*.txt"]
+cairn = ["generation/prompts/*.txt", "serve/static/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# the CI fixture is a copy of FastAPI files (some are named test_*.py): data, not our tests
+norecursedirs = ["tests/fixtures", ".git", "learn"]
 
 [tool.ruff]
 line-length = 100
-extend-exclude = ["learn"]
+extend-exclude = ["learn", "tests/fixtures"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]

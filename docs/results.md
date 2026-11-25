@@ -1031,3 +1031,55 @@ This is tested with a scripted model, not with a real outage. A failing model gi
 - No reranker in the service (hybrid only). One shared API key, no TLS. Rate limits and caches live in the process, so a restart loses them and several processes would not share them. The rate-limit identity is the client address (behind a proxy it needs `--proxy-headers`).
 - `/ingest` re-scans the corpus folder; it does not fetch a new version of the repository.
 - Concurrent streaming was tested with a mock HTTP transport (two streams each reading their own token counts), not with two real model calls.
+
+## Phase 10: a page, a container, CI with a retrieval gate (deployment prepared, not done)
+
+What was built: `src/cairn/serve/static/` (the page), `GET /source`, retrieval-only (`--llm none`) and BM25-only (`--retriever bm25`) modes, the `Dockerfile` and `docker-compose.yml`, `.github/workflows/ci.yml`, `scripts/ci_gate.py` with `tests/fixtures/ci_corpus` and `eval/ci_gate.json`, and `scripts/make_space.py` with `docs/deploy.md`. The decisions are in `docs/adr/0009-shipping.md`. In this phase the AI assistant wrote all of it at the author's request, with tests.
+
+**What was and was not run.** The container was built and run here (Docker Desktop on Windows). The CI commands (format, lint, tests, the gate) were run here in a clean copy of the repository with no `data/` and no torch. **The workflow ran on GitHub: the first run on GitHub failed at once with a YAML error (an unquoted colon in a step name; fixed), and the next run (run 45697992667, on pull request 14) passed both jobs. Nothing is deployed.** In that passing run (Ubuntu runner, about 1 min 10 s for the checks job and 30 s for the image job): 1,750 tests passed and 6 skipped, the gate printed the same numbers as on Windows (BM25 hit@5 0.775, MRR 0.703; hybrid hit@5 0.775, MRR 0.612), and the image job built the demo image, started it and got `cors.md` from `/search` and the page from `/ui/`.
+
+### The retrieval-regression gate
+
+`python scripts/ci_gate.py` ingests `tests/fixtures/ci_corpus` (72 files: every file the 40 dev questions point into plus 40 seeded distractors, copied unchanged, 753 KB) into 693 chunks and asks the 40 dev questions, in about 2 s and with no network. The dense half is the word-hashing model, so the run is deterministic. Measured, and committed as the thresholds in `eval/ci_gate.json`:
+
+| retriever (fixture, 40 dev questions, k = 10) | hit@1 | hit@5 | hit@10 | MRR |
+|---|---|---|---|---|
+| BM25 | 0.650 | 0.775 | 0.800 | 0.703 |
+| dense (word hashing, a stand-in) | 0.350 | 0.550 | 0.600 | 0.438 |
+| hybrid (min-max) | 0.525 | 0.775 | 0.800 | 0.612 |
+
+The gate fails if BM25 or hybrid hit@5 drops at all below 0.775 (one question is 0.025), or MRR by more than 0.01. These are **not** the numbers of the real system (3,267 chunks, `bge-small`); they are a regression baseline.
+
+**Regressions tried** (each applied to the source, then the gate and the whole unit suite run):
+
+| change | gate | unit tests |
+|---|---|---|
+| identifiers no longer split (`snake_case`, `camelCase`) | fails (BM25 hit@5 0.750, hybrid 0.700) | 15 fail |
+| prose chunks 300 to 40 tokens | fails (BM25 hit@5 0.700, MRR 0.560) | 1 fails (see below) |
+| BM25 `b` 0.75 to 0 | fails (BM25 hit@5 0.450) | 1 fails (stopped at the first) |
+| min-max normalisation replaced by `s / max` | fails (hybrid hit@5 0.750) | 1 fails (stopped at the first) |
+| the heading path left out of the indexed text | fails | 5 fail |
+| repeated query words counted twice | fails (hybrid hit@5 0.700) | 2 fail |
+| BM25 length normalisation removed | fails (BM25 hit@5 0.450) | 6 fail |
+
+Seven of seven were caught by both, so for these regressions the gate was not what found the bug. The prose-chunk change failed one unit test only because a test of mine hard-coded a chunk count (`12`); after making that test independent of the chunk size, the **same change passes all 1,738 unit tests and the gate still fails** (BM25 hit@5 0.775 to 0.700 and MRR 0.703 to 0.560, hybrid hit@5 0.775 to 0.700). One more variant (the Python chunker's size set to 20) changed nothing in the gate and was not studied further. These were seven chosen examples on one fixture, not a measure of how many regressions the gate would catch.
+
+### The container
+
+| | BM25 only (the default) | with the embedding model (`WITH_DENSE=1`) |
+|---|---|---|
+| image size | 457 MB | 2.65 GB |
+| ready after `docker run` | 10 s (3.3 s of it loading) | 17 to 25 s (13 to 14 s loading; two runs) |
+| memory (`docker stats`, after a few requests) | 93 MiB | 454 and 742 MiB (two runs) |
+
+Checked from outside the container: `/health` (ready, retriever `bm25`, model `none`), `/search` (the CORS question returns `tutorial/cors.md` lines 35 onwards), `/ask` (200, `degraded: true`, five passages and the reason), `/source` (the lines of `fastapi/utils.py`), `/ui/` (the page, with its security headers), the container's own health check (`healthy`), the user (`cairn`, not root), and `docker compose up` (bound to 127.0.0.1:8000, healthy after 7 s). The hybrid image runs offline (`HF_HUB_OFFLINE=1`; the embedding model is in the image) and answered a paraphrased question with the right file among three results. The `--profile llm` compose file was validated (`docker compose config`) but **not run**, because it would download an Ollama image and a model of several GB.
+
+### The page
+
+Checked in Chrome (a screen capture, the console and scripted interaction): the status line states the mode; a question returns passages with chips; a chip opens the source viewer with the cited lines 35-54 of `cors.md` highlighted; with a fake model the streamed answer shows `[1]` as a button and the footer shows the time to first text, total time, tokens and estimated cost; hostile text put through `renderAnswer` (`<img onerror=...>`) appeared as text, created no element and ran nothing, and an unknown citation `[99]` stayed plain text. The console showed no errors and no policy violations. The browser check found two bugs, both fixed: the API-key box was visible when no key was needed, and the page files were labelled "unmatched" in the metrics. There are no automated tests of the script itself, no check in another browser, no mobile device test and no accessibility audit.
+
+### Not done
+
+- **No deployment, no demo GIF, no live link in the README.** The deployment needs the author's hosting account; `docs/deploy.md` and `scripts/make_space.py` prepare it. The free tier of the planned host was reported inconsistent (see `docs/deploy.md`).
+- The actions are pinned to commits looked up on the day, which will need updating when they are replaced.
+- The gate uses dev questions and a stand-in for the embedding model; nothing here runs the real model in CI.
