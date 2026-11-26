@@ -31,6 +31,7 @@ A from-scratch RAG engine over a real codebase and its docs. Retrieval, indexing
 - **Phase 5 note:** the flat index is only 5.0 MB for this corpus and scans in 0.9 ms, while embedding the question takes 38.5 ms alone (measured separately; the eval's p50 of 112 ms is higher and unexplained), so ANN cannot fix the per-query latency at this size. Measure the scan time and the embedding time separately in `bench/ann.py`. The plan below still stands: use the flat index as the exact answer, and a larger scale set so ANN has something to prove.
 - **Phase 6 note:** the case for fusion was measured before the phase (at rank 1 each retriever alone gets 0.600, and at least one of them gets 0.775), but the dev advantage of fusion over dense was not statistically established and did not reproduce on the test split. The first of the two test runs is used (`eval/test_set_runs.log`); one is left for Phase 11. Five dev labels have a second passage that also answers the question and were kept (`eval/failures/phase6.md`).
 - **Phase 7 note:** ADR 0005 makes hybrid min-max the default retriever. Because dense alone did better on test, the generation evaluation on the dev questions should also report dense alone, so the retriever choice can be revisited on dev evidence and never on the test split. A reranker costs about 3 s per question and is off by default.
+- **Phase 11 note:** done with LlamaIndex + FAISS only (not LangChain, Chroma or pgvector). The assistant wrote it at the author's request. The default LlamaIndex pipeline was 0.30 hit@5 below Cairn dense on dev (46% of its chunks exceed the model's window; it does not split answers), a tuned one matched it, and on the 20 held-out questions nothing was distinguishable; the second and last test-split run is spent (`eval/test_set_runs.log`). 3 of 8 predictions were wrong. Found: LlamaIndex rank fusion reverses the dense ranking with the documented FAISS L2 index. Still open: the resume bullets in the author's words and the mock interview (`docs/resume-bullets.md`, `docs/notes/phase11.md`), the 5 held-out multi-hop questions (unused), deployment of the demo (`docs/results.md`, ADR 0010).
 - **Phase 10 note:** the page, a source viewer, Docker, CI and the retrieval gate are built and were run locally; the CI workflow ran on GitHub (the first run failed on a YAML error, the second passed both jobs: 1,750 tests on Linux and the gate with the same numbers as locally) and **nothing is deployed** (it needs the author's hosting account; `scripts/make_space.py` and `docs/deploy.md` prepare it; the free hosting tier was reported inconsistent). The public demo is retrieval only (no free model). The assistant wrote it at the author's request. Findings: the gate caught all 7 regressions tried, and so did the unit tests, except that after one hard-coded test count was fixed, shrinking prose chunks to 40 tokens passed all 1,738 unit tests while the gate failed (BM25 hit@5 0.775 to 0.700). The BM25-only container used 93 MiB. No demo GIF yet (`docs/results.md`, ADR 0009).
 - **Phase 9 note:** done with a fake model for the load test (a real local model takes about 40 s per answer, which would measure the model). The assistant wrote the implementation at the author's request. Findings: one torch thread per query gave 1.5 to 1.7 times the throughput; a blocking `async def` route made `/health` take 622 ms at 20 users against 5.4 ms; the semantic cache is off because no threshold separates paraphrases from near-misses (medians 0.93 and 0.94); changing 3 of 671 files embedded 3 of 45 new chunks in 0.81 s. Not done: a real model under load, several processes, the ANN indexes in the service, a real outage (`docs/results.md`, ADR 0008).
 - **Phase 8 note:** done with the same local model; the agent did not beat single-shot (multi-hop 4 of 10 against 4 of 9, single-hop 23 against 29 of 40, p = 0.24) and used 1.8 to 2.7 times the tokens, so single-shot stays the default. The assistant wrote the Phase 8 implementation and the 15 multi-hop questions at the author's request (`docs/results.md`, ADR 0007). Still open: a second agent run, an `agent_v2` prompt that forces a first search, a larger model, a stronger judge, the 5 test multi-hop questions (Phase 11).
@@ -375,7 +376,7 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 
 ---
 
-### Phase 11: Benchmark against the frameworks, then write it up (4–5 days)
+### Phase 11: Benchmark against the frameworks, then write it up (4–5 days) — DONE (except the interview)
 **Goal:** prove you understand what the frameworks hide.
 
 **You write**
@@ -416,13 +417,13 @@ Time estimates assume about **8–10 focused hours a week**. Doing it full-time 
 | 2 | Ingestion and chunking | 5–7 | 3 | done |
 | 3 | BM25 | 5–6 | 4 | done |
 | 4 | Dense retrieval | 4–5 | 5 | done |
-| 5 | ANN (IVF, HNSW) | 7–10 | 7 | next |
-| 6 | Hybrid and rerank | 5–6 | 8 | planned |
-| 7 | Generation | 6–8 | 9.5 | planned |
-| 8 | Agent loop | 5–7 | 11 | planned |
+| 5 | ANN (IVF, HNSW) | 7–10 | 7 | done |
+| 6 | Hybrid and rerank | 5–6 | 8 | done |
+| 7 | Generation | 6–8 | 9.5 | done |
+| 8 | Agent loop | 5–7 | 11 | done |
 | 9 | Serving and production | 7–9 | 13 | done |
 | 10 | Frontend, CI, deploy | 5–7 | 14.5 | done except deployment |
-| 11 | Framework benchmark and write-up | 4–5 | 15.5 | planned |
+| 11 | Framework benchmark and write-up | 4–5 | 15.5 | done |
 
 That is about **15 weeks part-time**, or 7–8 weeks near full-time, and roughly 4–6k lines of your own code. If time is tight, the **cut line is after Phase 7** (about 9–10 weeks). Phases 8–11 are depth and polish, but Phases 10–11 are what make it presentable, so don't skip them entirely: shrink 8 and 9 instead.
 

@@ -1083,3 +1083,140 @@ Checked in Chrome (a screen capture, the console and scripted interaction): the 
 - **No deployment, no demo GIF, no live link in the README.** The deployment needs the author's hosting account; `docs/deploy.md` and `scripts/make_space.py` prepare it. The free tier of the planned host was reported inconsistent (see `docs/deploy.md`).
 - The actions are pinned to commits looked up on the day, which will need updating when they are replaced.
 - The gate uses dev questions and a stand-in for the embedding model; nothing here runs the real model in CI.
+
+## Phase 11: Cairn against LlamaIndex and FAISS
+
+Protocol and predictions: `docs/briefs/phase11.md` (written before anything was measured). Code: `bench/frameworks/` (the rows, the adapter's tests are in `tests/test_eval_adapters.py`, the freeze rules in `src/cairn/evaluation/freeze.py`). The AI assistant wrote it all at the author's request. Everything ran on one Windows laptop, one process per row, in a separate environment with LlamaIndex 0.14.26 (`llama-index-core`), `faiss-cpu` 1.16.0, `sentence-transformers` 6.3.0 and torch 2.15.0 (CPU), all with the same `bge-small-en-v1.5` model and k = 10.
+
+**Held equal:** the corpus files, the embedding model with bge's query instruction, k = 10, the harness and its hit rule (a chunk is a hit if its lines overlap a gold span). **Not equal on purpose:** the reader, the chunker and the retrieval code. A framework node becomes a hit through its character offsets in the text it read (`cairn.evaluation.adapters`; 29 of 29 checked nodes pointed at their own text). **Caveat that applies to every row:** the hit rule rewards a chunk that is big enough to contain the answer, so each row also shows its chunk size.
+
+### The rows on the 40 dev questions
+
+| row | chunks | mean chunk (Cairn tokens) | over bge's 512 tokens | hit@1 | hit@5 | hit@10 | MRR |
+|---|---|---|---|---|---|---|---|
+| Cairn BM25 | 3,267 | 140 | 3% | 0.600 | 0.750 | 0.800 | 0.660 |
+| Cairn dense | 3,267 | 140 | 3% | 0.600 | 0.825 | 0.925 | 0.711 |
+| Cairn hybrid (min-max) | 3,267 | 140 | 3% | 0.700 | 0.850 | 0.925 | 0.766 |
+| LlamaIndex default (1,024-token `SentenceSplitter`, metadata kept, FAISS L2) | 1,012 | 518 | 46% | 0.325 | 0.525 | 0.625 | 0.420 |
+| the same with the line endings normalised (a control) | 1,006 | 514 | 46% | 0.375 | 0.550 | 0.700 | 0.470 |
+| the same without bge's query instruction | 1,012 | 518 | 46% | 0.250 | 0.550 | 0.625 | 0.374 |
+| the same with FAISS HNSW instead of flat | 1,012 | 518 | 46% | 0.325 | 0.525 | 0.625 | 0.420 |
+| **LlamaIndex selected (`md-code-30`)** | 2,784 | 195 | 3% | 0.650 | 0.775 | 0.850 | 0.711 |
+| LlamaIndex BM25, default chunking | 1,012 | 518 | 46% | 0.400 | 0.700 | 0.800 | 0.532 |
+| LlamaIndex BM25, selected chunking | 2,784 | 195 | 3% | 0.450 | 0.625 | 0.700 | 0.529 |
+| LlamaIndex fusion (reciprocal rank), default, FAISS L2 as documented | 1,012 | 518 | 46% | 0.175 | 0.675 | 0.775 | 0.391 |
+| the same with an inner-product index (diagnostic) | 1,012 | 518 | 46% | | 0.725 | | 0.490 |
+| LlamaIndex fusion, selected chunking, FAISS L2 | 2,784 | 195 | 3% | 0.200 | 0.675 | 0.750 | 0.391 |
+| the same with an inner-product index (diagnostic) | 2,784 | 195 | 3% | | 0.775 | | 0.614 |
+
+The retrieval is deterministic: two repeated runs of four rows gave identical hit@5 and MRR. **The selection of "LlamaIndex selected" was made on dev only** by a rule written in `candidates.json` before any candidate ran (highest hit@5, ties by MRR) among eight chunking candidates, all listed here with hit@5 and MRR: `md-code-30` 0.775, 0.711; `md-code-30-nometa` 0.775, 0.625; `md-sent-256-nometa` 0.750, 0.588; `md-sent-256` 0.750, 0.578; `sent-256-32-nometa` 0.675, 0.523; `sent-128-16-nometa` 0.625, 0.482; `sent-256-32` 0.625, 0.457; `sent-512-50` 0.550, 0.420. With 40 questions and 8 candidates the winner is partly luck (it won a tie on MRR).
+
+### Paired differences on dev (the same 40 questions; exact sign test on the questions where only one row hit; 95% bootstrap interval)
+
+| A against B | hit@5 A, B | only A, only B | p | hit@5 difference | MRR difference |
+|---|---|---|---|---|---|
+| Cairn dense, LlamaIndex default | 0.825, 0.525 | 14, 2 | < 0.01 | +0.300 [+0.12, +0.47] | +0.291 [+0.12, +0.46] |
+| Cairn hybrid, LlamaIndex default | 0.850, 0.525 | 15, 2 | < 0.01 | +0.325 [+0.15, +0.50] | +0.346 [+0.17, +0.52] |
+| LlamaIndex selected, LlamaIndex default | 0.775, 0.525 | 14, 4 | 0.03 | +0.250 [+0.05, +0.45] | +0.291 [+0.11, +0.47] |
+| Cairn dense, LlamaIndex selected | 0.825, 0.775 | 3, 1 | 0.62 | +0.050 [-0.05, +0.15] | 0.000 [-0.09, +0.09] |
+| Cairn hybrid, LlamaIndex selected | 0.850, 0.775 | 4, 1 | 0.38 | +0.075 [-0.03, +0.20] | +0.056 [-0.04, +0.16] |
+| Cairn BM25, LlamaIndex BM25 (default) | 0.750, 0.700 | 6, 4 | 0.75 | +0.050 [-0.10, +0.20] | +0.128 [-0.01, +0.26] |
+| Cairn hybrid, LlamaIndex fusion (selected, IP) | 0.850, 0.775 | 3, 0 | 0.25 | +0.075 [0.00, +0.17] | +0.152 [+0.04, +0.27] |
+
+On dev the default LlamaIndex pipeline is clearly worse than Cairn (a gap of 0.30 in hit@5 whose interval excludes zero). The tuned LlamaIndex row is not distinguishable from Cairn dense or hybrid. Note that Cairn was designed and tuned over Phases 2 to 6 on these same 40 questions, and the LlamaIndex tuning also used them: neither side's dev number is a clean out-of-sample number.
+
+### The final test split (run 2 of 2; 20 questions, 5 per category; one question is 0.05)
+
+The rows and their dev numbers were frozen and committed before the run (`bench/frameworks/frozen.json`); the runner refuses unless the freeze is committed and the log shows one earlier run. The log now shows both allowed runs (`eval/test_set_runs.log`): **the test split is closed for the rest of the project.**
+
+| row | dev hit@5 | test hit@5 | dev MRR | test MRR |
+|---|---|---|---|---|
+| Cairn BM25 | 0.750 | 0.600 | 0.660 | 0.452 |
+| Cairn dense | 0.825 | 0.750 | 0.711 | 0.659 |
+| Cairn hybrid | 0.850 | **0.800** | 0.766 | 0.533 |
+| LlamaIndex default | 0.525 | 0.650 | 0.420 | 0.425 |
+| LlamaIndex selected (`md-code-30`) | 0.775 | 0.650 | 0.711 | 0.522 |
+| LlamaIndex BM25, default | 0.700 | 0.650 | 0.532 | 0.506 |
+| LlamaIndex BM25, selected | 0.625 | 0.650 | 0.529 | 0.378 |
+| LlamaIndex fusion, default (L2) | 0.675 | 0.750 | 0.391 | 0.460 |
+| LlamaIndex fusion, selected (IP) | 0.775 | 0.650 | 0.614 | 0.450 |
+
+| test: A against B | hit@5 A, B | only A, only B | p | hit@5 difference | MRR difference |
+|---|---|---|---|---|---|
+| Cairn dense, LlamaIndex default | 0.750, 0.650 | 5, 3 | 0.73 | +0.100 [-0.20, +0.35] | +0.233 [-0.03, +0.48] |
+| Cairn dense, LlamaIndex selected | 0.750, 0.650 | 3, 1 | 0.62 | +0.100 [-0.10, +0.30] | +0.136 [+0.02, +0.25] |
+| Cairn hybrid, LlamaIndex default | 0.800, 0.650 | 4, 1 | 0.38 | +0.150 [-0.05, +0.35] | +0.108 [-0.13, +0.34] |
+| Cairn hybrid, LlamaIndex selected | 0.800, 0.650 | 4, 1 | 0.38 | +0.150 [-0.05, +0.35] | +0.010 [-0.12, +0.13] |
+| LlamaIndex selected, LlamaIndex default | 0.650, 0.650 | 5, 5 | 1.00 | 0.000 [-0.30, +0.30] | +0.097 [-0.15, +0.34] |
+| Cairn hybrid, Cairn dense | 0.800, 0.750 | 2, 1 | 1.00 | +0.050 [-0.10, +0.20] | **-0.126 [-0.24, -0.02]** |
+
+What the test run says, and does not:
+
+- **No hit@5 difference between any two rows is statistically distinguishable on 20 questions** (every interval includes zero; no p below 0.25). The dev gap of 0.30 between Cairn and the LlamaIndex default shrinks to 0.10 and is not significant. With 8 pairs and 2 metrics, the two intervals that exclude zero (both are MRR differences) should not be read as findings.
+- **The rows tuned on dev tended to lose on test; two untuned rows gained.** Hit@5, dev to test: Cairn BM25 -0.15, Cairn dense -0.075, Cairn hybrid -0.05, LlamaIndex selected -0.125, LlamaIndex fusion (selected) -0.125; but LlamaIndex default +0.125 and LlamaIndex fusion on default chunking +0.075 (the LlamaIndex BM25 rows moved -0.05 for default chunking and +0.025 for selected). That is the pattern expected from selection on a small dev set (regression to the mean), and it is a pattern in nine rows, not evidence about which system is better; it cannot be checked further because the test split is now used up.
+- **Hybrid did not beat dense on test.** Its MRR is lower than dense by 0.126 (interval -0.24 to -0.02) while its hit@5 is 0.05 higher. This is the second time: after Phase 6, dense alone also did better on test than hybrid, which was tuned on dev (ADR 0005). Fusion's advantage on dev has not reproduced on either test run.
+- **Nothing here supports "Cairn beats LlamaIndex".** What is supported: an untuned LlamaIndex pipeline was far worse on dev for reasons that can be named (below); a tuned one matched Cairn dense within noise on dev; on 20 held-out questions the systems cannot be told apart.
+
+### Explaining the gaps with what was built
+
+1. **LlamaIndex default, 0.30 below Cairn dense on dev.** Evidence, not proof (the changes below were cumulative, not independent):
+   - **Chunks too big for the model.** Mean 518 tokens against 140, and 46% of its chunks exceed bge's 512-token window against 3%, so the model never reads the end of nearly half of them (Phase 4 had measured only the 83 chunks over the limit). Shrinking the same splitter's chunks raised hit@5: 1,024 tokens 0.525, 512 tokens 0.550, 256 tokens 0.625.
+   - **The default does not cut gold answers; it is too coarse.** The share of gold spans lying whole in one chunk (the Phase 2 measure) is 1.000 for the default, 0.880 for Cairn, and 0.540 for 256-token sentence chunks (which cut 46% of spans). So my prediction that the default would "split mid-function" was wrong; the 256-token splitter is the one that cuts answers. The selected chunker keeps 0.960 whole (code 1.000) with small chunks, which is the combination that worked.
+   - **Structure helped step by step.** At 256 tokens, splitting Markdown at its headings raised hit@5 from 0.675 to 0.750, and splitting Python with a code-aware splitter (30-line windows on syntax boundaries) raised MRR from 0.588 to 0.625 with hit@5 0.775.
+   - **Metadata in the embedded text is a mixed effect.** LlamaIndex puts the file name, size and dates in what it embeds. Removing it helped sentence chunks (256 tokens: hit@5 0.625 to 0.675, MRR 0.457 to 0.523) but hurt the selected chunking (MRR 0.711 to 0.625), probably because the file path carries useful words for code. Untested beyond these rows.
+   - **Small effects:** bge's query instruction changed hit@5 by 0.025 (0.550 without, 0.525 with) and MRR by 0.046 the other way; Windows line endings (kept by LlamaIndex, removed by Cairn's reader) moved hit@5 from 0.525 to 0.550. Neither explains the gap.
+   - **Right file, wrong lines.** At file level the default finds the right file in its top 5 for 67.5% of questions against 87.5% for Cairn dense, and loses another 15 points between the file and the gold lines.
+2. **LlamaIndex selected against Cairn dense (-0.05 hit@5, MRR equal; not significant).** Not explained beyond noise. A candidate cause on the three questions only Cairn got (`q038` code, `q043` code, `q055` multi-chunk): Cairn's chunker cuts Python at function boundaries and `q038`'s gold function was ranked first by Cairn but a neighbouring chunk won in LlamaIndex. Untested.
+3. **LlamaIndex BM25 against Cairn BM25 (0.700 against 0.750, not significant).** A candidate cause is tokenisation: Cairn splits `snake_case` and `camelCase` identifiers (Phase 3 measured +0.108 MRR for that), LlamaIndex's BM25 stems and removes stop words. Untested here.
+4. **LlamaIndex fusion collapsed with its documented FAISS setup.** With the L2 index that LlamaIndex's own documentation uses, the vector retriever returns nodes best-first but with the raw L2 distance as the score (smaller is better); `QueryFusionRetriever` re-sorts by score, largest first, so it reverses the dense half of the ranking: hit@1 0.175, MRR 0.391. Checked directly (L2 scores come back ascending, inner-product scores descending). With an inner-product index the same fusion gets hit@5 0.775 and MRR 0.614 on the selected chunking, still below Cairn hybrid (0.850, 0.766; MRR difference +0.152 [+0.04, +0.27]). A candidate cause for that remainder is that rank-only fusion cannot tell a confident match from a weak one while Cairn's min-max fusion uses the scores. Untested. (`QueryFusionRetriever` also demands a language-model object even with one query and no generation; without it, it tries to import the OpenAI package.)
+
+### Cost: build time, memory, latency, lines of code
+
+Two repeats with nothing else running (build time and latency vary by about 10%; memory did not):
+
+| row | build (s) | embedding share of build | query p50 (ms) | query p95 (ms) | peak memory (MB) | memory after imports (MB) |
+|---|---|---|---|---|---|---|
+| Cairn dense | 120, 133 | 99% | 20.8, 18.8 | 24.8, 23.6 | 825, 824 | 388 |
+| Cairn hybrid | 120, 117 | 99% | 28.5, 23.9 | 32.9, 35.7 | 863, 852 | 389 |
+| LlamaIndex default | 108, 108 | 97% | 23.3, 19.2 | 28.8, 21.8 | 882, 903 | 450 |
+| LlamaIndex selected | 265, 269 | 99% | 22.7, 19.8 | 54.0, 23.5 | 901, 937 | 452 |
+
+- **Build time is embedding for every row**; the selected LlamaIndex row takes about twice as long as Cairn although it has fewer chunks (2,784 against 3,267). Candidate causes, untested: its embedding batches are 10 against Cairn's 16 sorted by length (less padding), and the metadata in its embedded text (removing it cut that row's embedding time from 341 to 226 s in the first, noisier run).
+- **Memory:** peaks are 7 to 14% above Cairn dense (prediction: more than 30%, wrong); after imports 450 against 388 MB (+16%). Every row imported `sentence_transformers`, so the comparison understates what the framework alone adds.
+- **Latency:** within 25% of Cairn on idle repeats (prediction right). Retrieval-only BM25: 0.6 to 0.9 ms against Cairn's 2.0 to 5.7 ms.
+- **Cold import** of the framework environment took 103 to 135 s the first time (antivirus scanning, a cold disk cache) and 7 to 25 s afterwards: the import cost is dominated by the machine, not a number to quote.
+- **Lines of code you write** (non-blank lines not starting with `#`; `bench/frameworks/loc.py`): Cairn's whole BM25 + dense + hybrid pipeline is **922** lines in 16 modules (chunkers alone 252); the LlamaIndex equivalents are **18** lines (default vector search) and **28** (Markdown + code splitting, vector + BM25 fusion), imports included. This counts what you write, not the library under it.
+
+### FAISS against Cairn's own indexes (`bench/frameworks/faiss_vs_cairn.py`)
+
+The Phase 5 synthetic set (100,000 vectors, 384 dimensions, 1,000 queries here, k = 10, one query at a time). Cairn's HNSW and FAISS's HNSW both use M 16 and efConstruction 100:
+
+| index | recall@10 | queries/s |
+|---|---|---|
+| Cairn flat (numpy) | 1.000 | 184 |
+| FAISS `IndexFlatIP` | 1.000 | 120 (FAISS reported 1 thread here, so the "default threads" run is the same) |
+| Cairn HNSW, ef 10 / 30 / 60 / 160 / 320 | 0.903 / 0.945 / 0.970 / 0.990 / 0.999 | 4,248 / 2,387 / 1,459 / 629 / 315 |
+| FAISS HNSW, ef 10 / 30 / 60 / 160 / 320 | 0.893 / 0.944 / 0.971 / 0.990 / 0.996 | 23,089 / 10,143 / 6,521 / 3,062 / 1,483 |
+
+FAISS HNSW is 4.2 to 5.4 times faster at the same recall (about 4.5 times at 0.97) and built in 22.5 s against 482 s for Cairn's (21 times); but its exact search was **slower** than Cairn's numpy one (0.65 times), against my prediction of 2 times faster. A candidate cause: a single query is one matrix-vector product, which numpy hands to an optimised BLAS routine and FAISS does with its own loop. Untested. The Phase 5 table measured Cairn's HNSW at 571 queries/s at ef 60; the same index measures 1,345 to 1,459 today on the same machine, so only numbers from one run are compared here.
+
+### My eight predictions
+
+| # | prediction | outcome |
+|---|---|---|
+| 1 | LlamaIndex default hit@5 0.70 to 0.85, MRR 0.55 to 0.72 | wrong: 0.525 and 0.420 |
+| 2 | its weakest category is code, because it splits Python mid-function | wrong: weakest on lexical (hit@5 0.3), and it keeps 100% of gold spans whole |
+| 3 | tuned LlamaIndex within 0.05 hit@5 of Cairn dense, not above by more than 0.05 | right, exactly at the edge (0.775 against 0.825) |
+| 4 | dense query p50 within 25% of Cairn's | right |
+| 5 | FAISS HNSW at least 5 times and FAISS flat at least 2 times faster | mostly wrong: HNSW 4.2 to 5.4 times (about 4.5 at equal recall), flat 0.65 times |
+| 6 | LlamaIndex peak memory more than 30% above Cairn dense | wrong: 7 to 14% |
+| 7 | build time dominated by embedding in every row | right (97 to 99%) |
+| 8 | the framework pipeline about an order of magnitude shorter | right: 33 to 51 times |
+
+### Not done, and limits
+
+- Only LlamaIndex with FAISS: no LangChain, Chroma or pgvector, so "the frameworks" means one framework and one vector library. One embedding model.
+- The test split has 20 questions and is now closed; nothing above can be rerun on it. The 5 held-out multi-hop test questions (m11 to m15) were not used, since they need a language model and the agent.
+- The dev questions were used to build Cairn (Phases 2 to 6) and to tune LlamaIndex (8 candidates); only the test numbers are out of sample, and they cannot separate the systems.
+- The explanations marked "candidate cause" were not tested. Those that rest on candidate-by-candidate changes are cumulative, not isolated effects. Gold spans, questions and the hit rule are the same for every row, but the question set was drafted with an AI assistant (README).
+- The diagnostic rows (inner-product fusion, the line-ending control) were added after seeing results; they are labelled as such and are not tuning candidates.

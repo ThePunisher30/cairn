@@ -1,0 +1,27 @@
+{
+  "rule": "non-blank lines that do not start with #",
+  "cairn_modules": {
+    "types.py": 61,
+    "tokens.py": 16,
+    "jsonl.py": 27,
+    "ingest/documents.py": 26,
+    "ingest/chunkers.py": 252,
+    "ingest/pipeline.py": 71,
+    "retrieval/tokenizer.py": 23,
+    "retrieval/index.py": 59,
+    "retrieval/bm25.py": 39,
+    "retrieval/fusion.py": 58,
+    "retrieval/hybrid.py": 51,
+    "dense/embedder.py": 41,
+    "dense/models.py": 75,
+    "dense/cache.py": 46,
+    "dense/flat_index.py": 52,
+    "dense/retriever.py": 25
+  },
+  "cairn_total": 922,
+  "llamaindex_imports": 8,
+  "llamaindex_default_pipeline": 10,
+  "llamaindex_selected_pipeline": 20,
+  "llamaindex_default_total": 18,
+  "llamaindex_selected_total": 28
+}

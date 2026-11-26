@@ -1,0 +1,115 @@
+{
+  "vectors": 100000,
+  "dim": 384,
+  "queries": 1000,
+  "k": 10,
+  "rows": [
+    {
+      "index": "Cairn flat (numpy)",
+      "queries_per_second": 183.6,
+      "recall": 1.0
+    },
+    {
+      "index": "FAISS IndexFlatIP, 1 thread",
+      "queries_per_second": 120.1,
+      "recall": 1.0
+    },
+    {
+      "index": "FAISS IndexFlatIP, default threads (1)",
+      "queries_per_second": 123.4,
+      "recall": 1.0
+    },
+    {
+      "index": "Cairn HNSW M16 ef10",
+      "queries_per_second": 4248.2,
+      "recall": 0.9029
+    },
+    {
+      "index": "Cairn HNSW M16 ef30",
+      "queries_per_second": 2387.4,
+      "recall": 0.9451
+    },
+    {
+      "index": "Cairn HNSW M16 ef60",
+      "queries_per_second": 1458.9,
+      "recall": 0.9697
+    },
+    {
+      "index": "Cairn HNSW M16 ef80",
+      "queries_per_second": 1153.7,
+      "recall": 0.9721
+    },
+    {
+      "index": "Cairn HNSW M16 ef160",
+      "queries_per_second": 629.0,
+      "recall": 0.9901
+    },
+    {
+      "index": "Cairn HNSW M16 ef320",
+      "queries_per_second": 315.0,
+      "recall": 0.9985
+    },
+    {
+      "index": "FAISS HNSW M16 ef10, 1 thread",
+      "queries_per_second": 23089.1,
+      "recall": 0.8929
+    },
+    {
+      "index": "FAISS HNSW M16 ef30, 1 thread",
+      "queries_per_second": 10142.7,
+      "recall": 0.9438
+    },
+    {
+      "index": "FAISS HNSW M16 ef60, 1 thread",
+      "queries_per_second": 6520.7,
+      "recall": 0.9711
+    },
+    {
+      "index": "FAISS HNSW M16 ef80, 1 thread",
+      "queries_per_second": 5651.4,
+      "recall": 0.9771
+    },
+    {
+      "index": "FAISS HNSW M16 ef160, 1 thread",
+      "queries_per_second": 3061.6,
+      "recall": 0.99
+    },
+    {
+      "index": "FAISS HNSW M16 ef320, 1 thread",
+      "queries_per_second": 1482.6,
+      "recall": 0.9959
+    },
+    {
+      "index": "FAISS HNSW M16 ef10, default threads",
+      "queries_per_second": 23530.9,
+      "recall": 0.8929
+    },
+    {
+      "index": "FAISS HNSW M16 ef30, default threads",
+      "queries_per_second": 12543.0,
+      "recall": 0.9438
+    },
+    {
+      "index": "FAISS HNSW M16 ef60, default threads",
+      "queries_per_second": 7405.6,
+      "recall": 0.9711
+    },
+    {
+      "index": "FAISS HNSW M16 ef80, default threads",
+      "queries_per_second": 5747.5,
+      "recall": 0.9771
+    },
+    {
+      "index": "FAISS HNSW M16 ef160, default threads",
+      "queries_per_second": 2865.8,
+      "recall": 0.99
+    },
+    {
+      "index": "FAISS HNSW M16 ef320, default threads",
+      "queries_per_second": 1459.3,
+      "recall": 0.9959
+    }
+  ],
+  "faiss_hnsw_build_seconds": 22.5,
+  "peak_memory_mb": 936.1
+}
