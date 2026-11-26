@@ -110,7 +110,7 @@ The same pipeline rebuilt in LlamaIndex with FAISS, same embedding model, same q
 
 ## How it is evaluated
 
-- **60 questions** about FastAPI in four categories (lexical, semantic, multi-chunk, code lookup), 15 each, split into 40 dev and 20 test questions. The test split is frozen: it is run twice in the whole project (once after Phase 6, done; once at the end) and `run_eval.py` and `ablate_hybrid.py` refuse it without `--use-test-set`. All tuning is done on the dev questions.
+- **60 questions** about FastAPI in four categories (lexical, semantic, multi-chunk, code lookup), 15 each, split into 40 dev and 20 test questions. The test split is frozen: it was run twice in the whole project (once after Phase 6, once in Phase 11) and is now closed and `run_eval.py` and `ablate_hybrid.py` refuse it without `--use-test-set`. All tuning is done on the dev questions.
 - **Gold answers are file and line ranges, not chunk IDs**, so they survive any change of chunking. A retrieved chunk is a hit if its lines overlap a gold range.
 - **The questions were drafted with AI assistance** from passages chosen with a helper script. Gold spans are checked by tests, and `scripts/question_overlap.py` reports how many of a question's words also appear in its answer passage, per category. Questions written after reading a passage tend to echo it somewhat, and 60 questions is a small set.
 - **Metrics:** hit@k, recall@k, MRR and nDCG@k, plus latency p50 and p95. Two baselines (random, first-N) and an oracle check that the harness can tell good from bad.
