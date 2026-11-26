@@ -1,0 +1,15 @@
+{
+  "_note": "The LlamaIndex configurations that may be tried, written down BEFORE any of them is run. They are run on the dev questions only. Selection rule: highest hit@5, ties broken by MRR. At most these 8 chunking candidates, each with the vector retriever; the BM25 and fusion rows reuse the default chunking and the selected one.",
+  "default_row": "li-default",
+  "chunking_candidates": [
+    {"name": "sent-512-50", "chunking": {"kind": "sentence", "chunk_size": 512, "chunk_overlap": 50}, "exclude_metadata": false},
+    {"name": "sent-256-32", "chunking": {"kind": "sentence", "chunk_size": 256, "chunk_overlap": 32}, "exclude_metadata": false},
+    {"name": "sent-256-32-nometa", "chunking": {"kind": "sentence", "chunk_size": 256, "chunk_overlap": 32}, "exclude_metadata": true},
+    {"name": "sent-128-16-nometa", "chunking": {"kind": "sentence", "chunk_size": 128, "chunk_overlap": 16}, "exclude_metadata": true},
+    {"name": "md-sent-256", "chunking": {"kind": "md+sentence", "chunk_size": 256, "chunk_overlap": 32}, "exclude_metadata": false},
+    {"name": "md-sent-256-nometa", "chunking": {"kind": "md+sentence", "chunk_size": 256, "chunk_overlap": 32}, "exclude_metadata": true},
+    {"name": "md-code-30", "chunking": {"kind": "md+code", "chunk_lines": 30, "chunk_lines_overlap": 5, "max_chars": 1500}, "exclude_metadata": false},
+    {"name": "md-code-30-nometa", "chunking": {"kind": "md+code", "chunk_lines": 30, "chunk_lines_overlap": 5, "max_chars": 1500}, "exclude_metadata": true}
+  ],
+  "other_rows": ["li-default-noprefix", "li-bm25-default", "li-fusion-default", "li-bm25-selected", "li-fusion-selected", "li-default-hnsw"]
+}
