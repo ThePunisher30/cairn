@@ -62,7 +62,7 @@
 - `tests/test_agent_llm.py`, `test_agent_budget.py`, `test_agent_trace.py`, `test_agent_tools.py`, `test_agent_loop.py`: the specification, module by module. **Read the docstring at the top of each before you write the module**: it lists the exact names, arguments, rules and error cases.
 - `tests/test_multihop_questions.py`: checks on *your* `eval/multihop_questions.jsonl` (format in its docstring). It skips until the file exists.
 - The tests need no network and no model: `FakeLLM` stands in. They were checked against a reference solution and against deliberately broken versions of it.
-- Still to come when you reach them (not yet written): `scripts/agent_eval.py` and its tests.
+- `scripts/agent_eval.py` and its tests were written later, in this phase, by the assistant.
 
 ---
 
