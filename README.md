@@ -4,7 +4,7 @@ A from-scratch RAG engine over the [FastAPI](https://github.com/fastapi/fastapi)
 
 The point of the project is to understand every layer and to measure each choice, so every number below traces to a row in [`docs/results.md`](docs/results.md).
 
-**Status: Phases 0-10 of 11 are done, except the last step of Phase 10: the public demo is built and tested locally but not deployed (see [Try it](#try-it)).** Retrieval, generation, an agent loop, an HTTP service with a web page, Docker and CI work and are measured (see [Roadmap](#roadmap)).
+**Status: all 11 phases are done, except the last step of Phase 10: the public demo is built and tested locally but not deployed (see [Try it](#try-it)).** Retrieval, generation, an agent loop, an HTTP service with a web page, Docker and CI work and are measured (see [Roadmap](#roadmap)).
 
 ## Try it
 
@@ -91,6 +91,23 @@ The multi-hop questions were drafted with an AI assistant, and one is ambiguous.
 - **The semantic cache is off:** on 15 paraphrases and 18 near-misses no similarity threshold separates "the same question" from "a similar one" (medians 0.93 and 0.94). The exact cache is on.
 - **Not measured:** the service with a real model under load, more than one process, a real outage. See [`docs/results.md`](docs/results.md), "Phase 9", and [ADR 0008](docs/adr/0008-serving.md).
 
+### Against LlamaIndex and FAISS (Phase 11)
+
+The same pipeline rebuilt in LlamaIndex with FAISS, same embedding model, same questions and metric, compared with a protocol and eight predictions written before measuring ([`docs/briefs/phase11.md`](docs/briefs/phase11.md), results and explanations in [`docs/results.md`](docs/results.md), the write-up in [`docs/writeup.md`](docs/writeup.md), [ADR 0010](docs/adr/0010-framework-comparison.md)).
+
+| row | dev hit@5 | dev MRR | test hit@5 (20 questions) | test MRR |
+|---|---|---|---|---|
+| Cairn dense | 0.825 | 0.711 | 0.750 | 0.659 |
+| Cairn hybrid | 0.850 | 0.766 | 0.800 | 0.533 |
+| LlamaIndex default | 0.525 | 0.420 | 0.650 | 0.425 |
+| LlamaIndex tuned (chosen on dev from 8 candidates) | 0.775 | 0.711 | 0.650 | 0.522 |
+
+- **On dev the default LlamaIndex pipeline was 0.30 hit@5 below Cairn dense** (95% interval +0.12 to +0.47). The cause is chunks too big for the model (46% longer than bge's 512-token window, against 3%), not split answers: every gold span sits whole inside one of its chunks. Tuned, it matched Cairn dense within one question's noise. Both sides were tuned on these dev questions.
+- **On the 20 held-out questions no two rows can be told apart** (smallest p 0.25; one question is 0.05). The held-out split is now closed: it was run twice in the project. Rows tuned on dev tended to lose on test, and hybrid again did not beat dense there.
+- **A trap in the documented setup:** with the FAISS L2 index LlamaIndex's docs show, its reciprocal-rank fusion silently reverses the dense ranking (MRR 0.391; 0.614 with an inner-product index).
+- **FAISS HNSW was 4.2 to 5.4 times faster than Cairn's from-scratch HNSW** at the same recall (synthetic 100,000 vectors), built 21 times faster, and its exact search was slower than numpy. The framework pipeline is 18 to 28 lines against 922 for Cairn's equivalent. Three of the eight predictions were wrong.
+- **Not done:** LangChain, Chroma, pgvector; a language model through the frameworks.
+
 ## How it is evaluated
 
 - **60 questions** about FastAPI in four categories (lexical, semantic, multi-chunk, code lookup), 15 each, split into 40 dev and 20 test questions. The test split is frozen: it is run twice in the whole project (once after Phase 6, done; once at the end) and `run_eval.py` and `ablate_hybrid.py` refuse it without `--use-test-set`. All tuning is done on the dev questions.
@@ -143,9 +160,17 @@ python scripts/ablate_hybrid.py --expansion     # small-to-big expansion
 python scripts/list_failures.py --rerank --focus rrf+rerank   # where the gold passage ranks, per question
 ```
 
-Tests and lint: `pytest -q` (1,754 tests, 2 skipped, no network, model or paid key needed: the dense, reranking and agent tests use small offline stand-ins and a scripted model) and `ruff check .`.
+Tests and lint: `pytest -q` (1,773 tests, 2 skipped, no network, model or paid key needed: the dense, reranking and agent tests use small offline stand-ins and a scripted model) and `ruff check .`.
 
 ```bash
+# Phase 11 (needs the framework environment: pip install llama-index-core llama-index-vector-stores-faiss llama-index-embeddings-huggingface llama-index-retrievers-bm25 faiss-cpu)
+python bench/frameworks/run_all.py --all-dev          # Cairn and LlamaIndex default rows on the dev questions
+python bench/frameworks/run_row.py --row li-md-code-30   # one row
+python bench/frameworks/paired.py                     # paired statistics for dev and test
+python bench/frameworks/faiss_vs_cairn.py             # FAISS against Cairn's indexes (data/scale-100000.npz)
+python bench/frameworks/loc.py                        # lines of code, one counting rule
+# the test split is closed (run twice); bench/frameworks/run_test.py --check-only will say so
+
 # Phase 10 (the page is served by the service itself: open http://127.0.0.1:8000 after starting it)
 python scripts/ci_gate.py                       # the CI retrieval gate, about 2 s, no network
 python scripts/ci_gate.py --update              # print new thresholds (a deliberate, reviewed change)
@@ -186,7 +211,7 @@ src/cairn/
   serve/        the HTTP service: API, live index, incremental indexing, caches, limits, metrics,
                 the web page (serve/static) and the source viewer
 scripts/        one runnable script per task (ingest, build_index, embed_chunks, run_eval, serve, ci_gate, ablations)
-bench/          load test, tombstone cost, retrieval profile, ANN benchmarks
+bench/          load test, tombstone cost, retrieval profile, ANN benchmarks, frameworks/ (the LlamaIndex and FAISS comparison, its results and the freeze)
 eval/           questions.jsonl (data only), ci_gate.json (the CI thresholds) and failures/ (failure analyses)
 tests/          unit and script tests; fixtures/ci_corpus is a copy of 72 FastAPI files for the CI gate
 .github/        the CI workflow
@@ -195,7 +220,7 @@ docs/           results.md (every number), adr/ (decisions), notes/ (what I lear
 PLAN.md         the full 11-phase plan and its status
 ```
 
-Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md), [generation](docs/adr/0006-generation.md), [the agent loop](docs/adr/0007-agent-loop.md), [the service](docs/adr/0008-serving.md), [shipping](docs/adr/0009-shipping.md).
+Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM25 settings](docs/adr/0002-bm25-settings.md), [dense retrieval](docs/adr/0003-dense-retrieval.md), [approximate indexes](docs/adr/0004-ann-indexes.md), [hybrid retrieval](docs/adr/0005-hybrid-retrieval.md), [generation](docs/adr/0006-generation.md), [the agent loop](docs/adr/0007-agent-loop.md), [the service](docs/adr/0008-serving.md), [shipping](docs/adr/0009-shipping.md), [the framework comparison](docs/adr/0010-framework-comparison.md).
 
 ## Roadmap
 
@@ -212,7 +237,7 @@ Decisions are recorded as short ADRs: [chunking](docs/adr/0001-chunking.md), [BM
 | 8 | Agent loop with tools, measured against single-shot | done |
 | 9 | FastAPI service: streaming, incremental indexing, caching, rate limiting, load test | done |
 | 10 | Frontend, Docker, CI with a retrieval-regression gate, deployment | done, except that the public demo is not deployed |
-| 11 | Benchmark against LangChain / LlamaIndex and a vector database; write-up | planned |
+| 11 | Benchmark against LlamaIndex and FAISS; the final test run; write-up | done |
 
 The details of each phase are in [`PLAN.md`](PLAN.md).
 
@@ -220,6 +245,6 @@ The details of each phase are in [`PLAN.md`](PLAN.md).
 
 This is a learning project built with an AI assistant (Claude) as tutor and pair: it wrote the phase briefs and the tests that each phase has to pass, helped with the implementation, and reviewed the code. The evaluation questions were drafted the same way (see above). The experiments, the measurements and the failure analyses are run on the real corpus, and the notes in `docs/notes/` record what each phase taught.
 
-In Phase 10 the web page, the Docker and CI files, the retrieval gate and the deployment preparation were also written by the assistant at the author's request, with tests. In Phase 9 the implementation of the service (`src/cairn/serve/`, the load test, the benchmarks, the semantic-cache pairs) was also written by the assistant at the author's request, with its tests. In Phase 8 the implementation (the clients' tool support, the agent modules, the evaluation script) and the 15 multi-hop questions were written by the assistant at the author's request, with tests written first and checked against a reference solution and deliberately broken variants of it. The earlier phases were written by the author with the assistant as tutor.
+In Phase 11 the comparison code, the protocol, the statistics and the write-ups were also written by the assistant at the author's request; the eight predictions in the brief were the assistant's, and three of them were wrong. In Phase 10 the web page, the Docker and CI files, the retrieval gate and the deployment preparation were also written by the assistant at the author's request, with tests. In Phase 9 the implementation of the service (`src/cairn/serve/`, the load test, the benchmarks, the semantic-cache pairs) was also written by the assistant at the author's request, with its tests. In Phase 8 the implementation (the clients' tool support, the agent modules, the evaluation script) and the 15 multi-hop questions were written by the assistant at the author's request, with tests written first and checked against a reference solution and deliberately broken variants of it. The earlier phases were written by the author with the assistant as tutor.
 
 The Anthropic client (Phase 7) reads its key from the `ANTHROPIC_API_KEY` environment variable and the key is never in the code. All Phase 7, 8 and 9 numbers come from a local model or a fake one, so no key was used. The service takes its own API key only from `CAIRN_API_KEY`, never from the command line.
