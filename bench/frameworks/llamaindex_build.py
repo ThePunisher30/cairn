@@ -104,20 +104,24 @@ def build_llamaindex(cfg, root, limit_files=None):
         texts = {path_of[d.doc_id]: d.text for d in documents}
         with Stopwatch() as parsing:
             nodes = _parse(documents, path_of, cfg["chunking"], cfg["exclude_metadata"])
-        embed_model = HuggingFaceEmbedding(
-            model_name=BGE,
-            query_instruction=BGE_QUERY_INSTRUCTION if cfg["query_instruction"] else None,
-            device="cpu",
-        )
-        with Stopwatch() as indexing:
-            store = FaissVectorStore(faiss_index=_faiss_index(cfg["faiss"], 384))
-            index = VectorStoreIndex(
-                nodes,
-                storage_context=StorageContext.from_defaults(vector_store=store),
-                embed_model=embed_model,
-                show_progress=False,
+        vector = None
+        indexing = Stopwatch()
+        indexing.seconds = 0.0
+        if cfg["retriever"] != "bm25":  # a BM25-only row embeds nothing
+            embed_model = HuggingFaceEmbedding(
+                model_name=BGE,
+                query_instruction=BGE_QUERY_INSTRUCTION if cfg["query_instruction"] else None,
+                device="cpu",
             )
-        vector = index.as_retriever(similarity_top_k=K)
+            with Stopwatch() as indexing:
+                store = FaissVectorStore(faiss_index=_faiss_index(cfg["faiss"], 384))
+                index = VectorStoreIndex(
+                    nodes,
+                    storage_context=StorageContext.from_defaults(vector_store=store),
+                    embed_model=embed_model,
+                    show_progress=False,
+                )
+            vector = index.as_retriever(similarity_top_k=K)
         retriever = vector
         if cfg["retriever"] in ("bm25", "fusion"):
             from llama_index.retrievers.bm25 import BM25Retriever

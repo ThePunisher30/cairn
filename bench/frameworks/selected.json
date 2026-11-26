@@ -1,0 +1,16 @@
+{
+  "_note": "The LlamaIndex chunking chosen on the 40 dev questions by the rule in candidates.json (highest hit@5, ties broken by MRR). Written after the eight candidate runs, before any BM25 or fusion row on it, and before the test split.",
+  "selected": "md-code-30",
+  "dev": {"hit@5": 0.775, "mrr": 0.711},
+  "runner_up": {"name": "md-code-30-nometa", "hit@5": 0.775, "mrr": 0.625},
+  "all_candidates_hit@5_mrr": {
+    "md-code-30": [0.775, 0.711],
+    "md-code-30-nometa": [0.775, 0.625],
+    "md-sent-256-nometa": [0.750, 0.588],
+    "md-sent-256": [0.750, 0.578],
+    "sent-256-32-nometa": [0.675, 0.523],
+    "sent-128-16-nometa": [0.625, 0.482],
+    "sent-256-32": [0.625, 0.457],
+    "sent-512-50": [0.550, 0.420]
+  }
+}

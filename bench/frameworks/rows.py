@@ -43,10 +43,8 @@ for candidate in CANDIDATES["chunking_candidates"]:
     ROWS["li-" + candidate["name"]] = li(candidate["chunking"], candidate["exclude_metadata"])
 
 
-def with_selected(selected_name):
-    """The rows that reuse the chunking chosen on dev (added after the selection)."""
-    base = ROWS["li-" + selected_name]
-    return {
-        "li-bm25-selected": {**base, "retriever": "bm25"},
-        "li-fusion-selected": {**base, "retriever": "fusion"},
-    }
+SELECTED = json.loads((Path(__file__).parent / "selected.json").read_text(encoding="utf-8"))[
+    "selected"
+]
+ROWS["li-bm25-selected"] = {**ROWS["li-" + SELECTED], "retriever": "bm25"}
+ROWS["li-fusion-selected"] = {**ROWS["li-" + SELECTED], "retriever": "fusion"}

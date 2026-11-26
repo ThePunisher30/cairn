@@ -95,7 +95,9 @@ def main(argv=None):
         faiss.omp_set_num_threads(threads or faiss.omp_get_max_threads())
         flat_faiss = faiss.IndexFlatIP(dim)
         flat_faiss.add(vectors.astype(np.float32))
-        qps, recall = best(lambda q: set(flat_faiss.search(q[None, :], K)[1][0].tolist()))
+        qps, recall = best(
+            lambda q, index=flat_faiss: set(index.search(q[None, :], K)[1][0].tolist())
+        )
         add(f"FAISS IndexFlatIP, {label}", qps, recall)
 
     if saved.is_file():
