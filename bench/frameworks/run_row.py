@@ -4,11 +4,12 @@
     python bench/frameworks/run_row.py --row cairn-hybrid --limit-files 30     # a quick smoke test
 
 Each row runs in its own process so that its peak memory is its own. The test split is refused
-here: it has a script of its own (`run_test.py`) that checks the freeze first.
+here unless `run_test.py` has checked the freeze and set the variable that allows it.
 """
 
 import argparse
 import json
+import os
 import platform
 import statistics
 import sys
@@ -66,7 +67,7 @@ def main(argv=None):
     parser.add_argument("--out", type=Path, default=None)
     parser.add_argument("--corpus", type=Path, default=CORPUS)
     args = parser.parse_args(argv)
-    if args.split == "test":
+    if args.split == "test" and not os.environ.get("CAIRN_FINAL_TEST_RUN"):
         print("error: the test split is run by run_test.py, after the freeze", file=sys.stderr)
         return 1
 

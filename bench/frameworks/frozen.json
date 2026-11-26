@@ -1,0 +1,105 @@
+{
+  "_note": "Frozen BEFORE the second and last test-split run. These are the rows the run will score, with the dev numbers they had at the freeze. Nothing is tuned after the commit that adds this file; bench/frameworks/run_test.py refuses to run unless this file is committed and unchanged and the log shows one earlier run. Dev quality was identical across repeated runs (the retrieval is deterministic).",
+  "rows": [
+    "cairn-bm25",
+    "cairn-dense",
+    "cairn-hybrid",
+    "li-default",
+    "li-md-code-30",
+    "li-bm25-default",
+    "li-bm25-selected",
+    "li-fusion-default",
+    "li-fusion-selected-ip"
+  ],
+  "dev": {
+    "cairn-bm25": {
+      "hit@1": 0.6,
+      "hit@5": 0.75,
+      "hit@10": 0.8,
+      "recall@10": 0.75,
+      "mrr": 0.6601,
+      "ndcg@10": 0.658
+    },
+    "cairn-dense": {
+      "hit@1": 0.6,
+      "hit@5": 0.825,
+      "hit@10": 0.925,
+      "recall@10": 0.8625,
+      "mrr": 0.7107,
+      "ndcg@10": 0.7235
+    },
+    "cairn-hybrid": {
+      "hit@1": 0.7,
+      "hit@5": 0.85,
+      "hit@10": 0.925,
+      "recall@10": 0.8625,
+      "mrr": 0.7665,
+      "ndcg@10": 0.7693
+    },
+    "li-default": {
+      "hit@1": 0.325,
+      "hit@5": 0.525,
+      "hit@10": 0.625,
+      "recall@10": 0.575,
+      "mrr": 0.42,
+      "ndcg@10": 0.4395
+    },
+    "li-md-code-30": {
+      "hit@1": 0.65,
+      "hit@5": 0.775,
+      "hit@10": 0.85,
+      "recall@10": 0.7875,
+      "mrr": 0.7107,
+      "ndcg@10": 0.71
+    },
+    "li-bm25-default": {
+      "hit@1": 0.4,
+      "hit@5": 0.7,
+      "hit@10": 0.8,
+      "recall@10": 0.7375,
+      "mrr": 0.5322,
+      "ndcg@10": 0.5588
+    },
+    "li-bm25-selected": {
+      "hit@1": 0.45,
+      "hit@5": 0.625,
+      "hit@10": 0.7,
+      "recall@10": 0.65,
+      "mrr": 0.5294,
+      "ndcg@10": 0.5337
+    },
+    "li-fusion-default": {
+      "hit@1": 0.175,
+      "hit@5": 0.675,
+      "hit@10": 0.775,
+      "recall@10": 0.75,
+      "mrr": 0.3907,
+      "ndcg@10": 0.4621
+    },
+    "li-fusion-selected-ip": {
+      "hit@1": 0.5,
+      "hit@5": 0.775,
+      "hit@10": 0.85,
+      "recall@10": 0.8,
+      "mrr": 0.614,
+      "ndcg@10": 0.6346
+    }
+  },
+  "how_chosen": {
+    "cairn-*": "the Phase 6 retrievers as they were (hybrid = min-max weighted fusion, the project default); not changed in Phase 11",
+    "li-default": "LlamaIndex defaults (SentenceSplitter 1024/200, metadata kept, FAISS IndexFlatL2), with bge's query instruction and k = 10",
+    "li-md-code-30": "the chunking selected on dev by the rule in candidates.json (see selected.json), vector search",
+    "li-bm25-*": "LlamaIndex BM25 retriever on the default and on the selected chunking",
+    "li-fusion-default": "default chunking, vector (FAISS L2, as documented) + BM25 by reciprocal-rank fusion; keeps the score-direction quirk found on dev",
+    "li-fusion-selected-ip": "selected chunking, vector (FAISS inner product, which avoids the quirk) + BM25 by reciprocal-rank fusion; the IP index was added after seeing the L2 fusion fail on dev, not chosen by search"
+  },
+  "not_in_the_test_run": [
+    "li-default-lf",
+    "li-default-noprefix",
+    "li-default-hnsw",
+    "li-fusion-default-ip",
+    "li-fusion-selected",
+    "and the seven other chunking candidates (diagnostics and losing candidates, dev only)"
+  ],
+  "test_questions": "the 20 test questions (5 per category); one question is 0.05, so a gap under about 0.1 is noise"
+}
