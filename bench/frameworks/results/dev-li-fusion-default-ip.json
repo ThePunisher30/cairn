@@ -1,0 +1,2701 @@
+{
+  "row": "li-fusion-default-ip",
+  "split": "dev",
+  "config": {
+    "framework": "llamaindex",
+    "chunking": {
+      "kind": "sentence",
+      "chunk_size": 1024,
+      "chunk_overlap": 200
+    },
+    "exclude_metadata": false,
+    "query_instruction": true,
+    "retriever": "fusion",
+    "faiss": "flat_ip",
+    "normalize_newlines": false
+  },
+  "limit_files": null,
+  "build": {
+    "bm25_seconds": 0.21834269998362288,
+    "build_seconds": 105.76127829999314,
+    "read_seconds": 0.5854080999852158,
+    "parse_seconds": 0.9368137000128627,
+    "embed_index_seconds": 102.57242819998646,
+    "files": 671,
+    "documents": 671,
+    "chunks": 1012
+  },
+  "chunk_stats": {
+    "chunks": 1012,
+    "chars_mean": 2168.0,
+    "chars_max": 6205,
+    "cairn_tokens_mean": 518.4,
+    "cairn_tokens_max": 1288,
+    "bge_tokens_mean": 592.2,
+    "bge_tokens_max": 1449,
+    "share_over_512_bge_tokens": 0.4605
+  },
+  "top5_cairn_tokens_mean": 4262.7,
+  "nodes_placed_by_text_search": 0,
+  "import_seconds": 6.65,
+  "rss_after_import_mb": 445.7,
+  "rss_after_build_mb": 841.6,
+  "peak_memory_mb": 890.9,
+  "summary": {
+    "overall": {
+      "n": 40,
+      "hit@1": 0.35,
+      "recall@1": 0.2875,
+      "ndcg@1": 0.35,
+      "hit@5": 0.725,
+      "recall@5": 0.6375,
+      "ndcg@5": 0.4947082158950879,
+      "hit@10": 0.75,
+      "recall@10": 0.6875,
+      "ndcg@10": 0.5132847157536521,
+      "mrr": 0.49041666666666667,
+      "latency_p50_ms": 20.693900005426258,
+      "latency_p95_ms": 25.36079997662455
+    },
+    "by_category": {
+      "lexical": {
+        "n": 10,
+        "hit@1": 0.2,
+        "recall@1": 0.2,
+        "ndcg@1": 0.2,
+        "hit@5": 0.7,
+        "recall@5": 0.7,
+        "ndcg@5": 0.4309812235026178,
+        "hit@10": 0.8,
+        "recall@10": 0.8,
+        "ndcg@10": 0.4666019422134201,
+        "mrr": 0.3616666666666667,
+        "latency_p50_ms": 19.005300011485815,
+        "latency_p95_ms": 21.60019997972995
+      },
+      "semantic": {
+        "n": 10,
+        "hit@1": 0.4,
+        "recall@1": 0.4,
+        "ndcg@1": 0.4,
+        "hit@5": 0.7,
+        "recall@5": 0.7,
+        "ndcg@5": 0.5761859507142916,
+        "hit@10": 0.7,
+        "recall@10": 0.7,
+        "ndcg@10": 0.5761859507142916,
+        "mrr": 0.5333333333333333,
+        "latency_p50_ms": 20.36180000868626,
+        "latency_p95_ms": 25.176600000122562
+      },
+      "multi_chunk": {
+        "n": 10,
+        "hit@1": 0.5,
+        "recall@1": 0.25,
+        "ndcg@1": 0.5,
+        "hit@5": 1.0,
+        "recall@5": 0.65,
+        "ndcg@5": 0.5716656893634424,
+        "hit@10": 1.0,
+        "recall@10": 0.75,
+        "ndcg@10": 0.6103509700868966,
+        "mrr": 0.7,
+        "latency_p50_ms": 21.62079999106936,
+        "latency_p95_ms": 23.049900017213076
+      },
+      "code": {
+        "n": 10,
+        "hit@1": 0.3,
+        "recall@1": 0.3,
+        "ndcg@1": 0.3,
+        "hit@5": 0.5,
+        "recall@5": 0.5,
+        "ndcg@5": 0.4,
+        "hit@10": 0.5,
+        "recall@10": 0.5,
+        "ndcg@10": 0.4,
+        "mrr": 0.36666666666666664,
+        "latency_p50_ms": 21.00919999065809,
+        "latency_p95_ms": 34.49869999894872
+      }
+    },
+    "misses": [
+      "q008",
+      "q014",
+      "q016",
+      "q022",
+      "q028",
+      "q031",
+      "q032",
+      "q041",
+      "q043",
+      "q044"
+    ]
+  },
+  "per_question": [
+    {
+      "id": "q001",
+      "category": "lexical",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          254,
+          259
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/applications.py",
+          3003,
+          3124
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          280,
+          344
+        ],
+        [
+          "fastapi/routing.py",
+          3940,
+          4063
+        ],
+        [
+          "fastapi/applications.py",
+          4173,
+          4291
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          201,
+          296
+        ],
+        [
+          "fastapi/applications.py",
+          3427,
+          3545
+        ],
+        [
+          "fastapi/applications.py",
+          2676,
+          2794
+        ],
+        [
+          "fastapi/applications.py",
+          1925,
+          2043
+        ],
+        [
+          "fastapi/routing.py",
+          5894,
+          6012
+        ],
+        [
+          "fastapi/routing.py",
+          5135,
+          5253
+        ]
+      ]
+    },
+    {
+      "id": "q002",
+      "category": "lexical",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          306,
+          312
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/applications.py",
+          3003,
+          3124
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          280,
+          344
+        ],
+        [
+          "fastapi/routing.py",
+          3940,
+          4063
+        ],
+        [
+          "fastapi/applications.py",
+          2568,
+          2695
+        ],
+        [
+          "fastapi/routing.py",
+          3509,
+          3636
+        ],
+        [
+          "fastapi/routing.py",
+          2988,
+          3097
+        ],
+        [
+          "fastapi/routing.py",
+          4695,
+          4816
+        ],
+        [
+          "fastapi/applications.py",
+          4173,
+          4291
+        ],
+        [
+          "fastapi/applications.py",
+          3427,
+          3545
+        ]
+      ]
+    },
+    {
+      "id": "q004",
+      "category": "lexical",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/security/simple-oauth2.md",
+          64,
+          70
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/security/oauth2.py",
+          213,
+          337
+        ],
+        [
+          "docs/en/docs/tutorial/security/simple-oauth2.md",
+          79,
+          193
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          313,
+          453
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          108,
+          222
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          1,
+          135
+        ],
+        [
+          "docs/en/docs/tutorial/security/simple-oauth2.md",
+          1,
+          99
+        ],
+        [
+          "fastapi/openapi/models.py",
+          340,
+          435
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          436,
+          598
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          562,
+          693
+        ],
+        [
+          "docs/en/docs/advanced/security/oauth2-scopes.md",
+          1,
+          105
+        ]
+      ]
+    },
+    {
+      "id": "q005",
+      "category": "lexical",
+      "gold": [
+        [
+          "docs/en/docs/advanced/security/http-basic-auth.md",
+          95,
+          102
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/advanced/security/http-basic-auth.md",
+          81,
+          107
+        ],
+        [
+          "docs/en/docs/advanced/security/http-basic-auth.md",
+          1,
+          91
+        ],
+        [
+          "docs_src/security/tutorial007_an_py310.py",
+          1,
+          36
+        ],
+        [
+          "docs_src/security/tutorial007_py310.py",
+          1,
+          33
+        ],
+        [
+          "docs_src/security/tutorial005_py310.py",
+          1,
+          66
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          213,
+          337
+        ],
+        [
+          "docs_src/security/tutorial005_py310.py",
+          66,
+          179
+        ],
+        [
+          "docs_src/security/tutorial005_an_py310.py",
+          1,
+          67
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          108,
+          222
+        ],
+        [
+          "docs_src/security/tutorial005_an_py310.py",
+          67,
+          182
+        ]
+      ]
+    },
+    {
+      "id": "q007",
+      "category": "lexical",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/cors.md",
+          35,
+          47
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/cors.md",
+          1,
+          62
+        ],
+        [
+          "docs/en/docs/tutorial/cors.md",
+          58,
+          89
+        ],
+        [
+          "docs_src/cors/tutorial001_py310.py",
+          1,
+          24
+        ],
+        [
+          "docs/en/docs/advanced/middleware.md",
+          1,
+          97
+        ],
+        [
+          "fastapi/middleware/cors.py",
+          1,
+          1
+        ],
+        [
+          "docs/en/docs/tutorial/cookie-param-models.md",
+          1,
+          76
+        ],
+        [
+          "docs/en/docs/tutorial/query-params-str-validations.md",
+          1,
+          92
+        ],
+        [
+          "docs/en/docs/reference/middleware.md",
+          1,
+          37
+        ],
+        [
+          "docs/en/docs/tutorial/query-param-models.md",
+          1,
+          68
+        ],
+        [
+          "fastapi/applications.py",
+          868,
+          979
+        ]
+      ]
+    },
+    {
+      "id": "q008",
+      "category": "lexical",
+      "gold": [
+        [
+          "docs/en/docs/advanced/custom-response.md",
+          149,
+          152
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/routing.py",
+          3410,
+          3535
+        ],
+        [
+          "docs/en/docs/tutorial/response-status-code.md",
+          1,
+          101
+        ],
+        [
+          "docs/en/docs/advanced/additional-status-codes.md",
+          1,
+          41
+        ],
+        [
+          "fastapi/routing.py",
+          369,
+          476
+        ],
+        [
+          "docs/en/docs/advanced/custom-response.md",
+          166,
+          267
+        ],
+        [
+          "docs/en/docs/deployment/index.md",
+          1,
+          23
+        ],
+        [
+          "docs/en/docs/advanced/response-change-status-code.md",
+          1,
+          31
+        ],
+        [
+          "docs/en/docs/tutorial/security/first-steps.md",
+          161,
+          203
+        ],
+        [
+          "fastapi/applications.py",
+          3526,
+          3655
+        ],
+        [
+          "fastapi/applications.py",
+          2024,
+          2153
+        ]
+      ]
+    },
+    {
+      "id": "q010",
+      "category": "lexical",
+      "gold": [
+        [
+          "docs/en/docs/advanced/custom-response.md",
+          255,
+          262
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/routing.py",
+          2340,
+          2471
+        ],
+        [
+          "fastapi/routing.py",
+          1019,
+          1062
+        ],
+        [
+          "fastapi/openapi/utils.py",
+          366,
+          471
+        ],
+        [
+          "docs/en/docs/advanced/custom-response.md",
+          166,
+          267
+        ],
+        [
+          "fastapi/routing.py",
+          1299,
+          1406
+        ],
+        [
+          "docs/en/docs/advanced/custom-response.md",
+          251,
+          273
+        ],
+        [
+          "fastapi/routing.py",
+          1219,
+          1322
+        ],
+        [
+          "fastapi/applications.py",
+          1566,
+          1736
+        ],
+        [
+          "fastapi/routing.py",
+          1383,
+          1484
+        ],
+        [
+          "fastapi/routing.py",
+          2446,
+          2563
+        ]
+      ]
+    },
+    {
+      "id": "q011",
+      "category": "lexical",
+      "gold": [
+        [
+          "docs/en/docs/advanced/security/http-basic-auth.md",
+          17,
+          21
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/security/http.py",
+          1,
+          165
+        ],
+        [
+          "fastapi/security/http.py",
+          149,
+          295
+        ],
+        [
+          "docs/en/docs/tutorial/security/first-steps.md",
+          161,
+          203
+        ],
+        [
+          "docs/en/docs/advanced/security/http-basic-auth.md",
+          1,
+          91
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          436,
+          598
+        ],
+        [
+          "fastapi/security/http.py",
+          274,
+          417
+        ],
+        [
+          "docs/en/docs/reference/security/index.md",
+          1,
+          75
+        ],
+        [
+          "docs/en/docs/tutorial/first-steps.md",
+          251,
+          398
+        ],
+        [
+          "docs/en/docs/deployment/concepts.md",
+          1,
+          78
+        ],
+        [
+          "docs/en/docs/tutorial/extra-models.md",
+          1,
+          143
+        ]
+      ]
+    },
+    {
+      "id": "q013",
+      "category": "lexical",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/path-params.md",
+          135,
+          139
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/applications.py",
+          3003,
+          3124
+        ],
+        [
+          "docs/en/docs/tutorial/path-params.md",
+          167,
+          251
+        ],
+        [
+          "docs/en/docs/tutorial/path-params.md",
+          1,
+          107
+        ],
+        [
+          "docs/en/docs/tutorial/path-params.md",
+          97,
+          187
+        ],
+        [
+          "docs/en/docs/python-types.md",
+          228,
+          338
+        ],
+        [
+          "docs/en/docs/tutorial/path-params-numeric-validations.md",
+          84,
+          154
+        ],
+        [
+          "docs/en/docs/tutorial/query-params.md",
+          113,
+          188
+        ],
+        [
+          "fastapi/param_functions.py",
+          255,
+          417
+        ],
+        [
+          "docs/en/docs/tutorial/security/first-steps.md",
+          161,
+          203
+        ],
+        [
+          "docs_src/path_operation_configuration/tutorial002b_py310.py",
+          1,
+          20
+        ]
+      ]
+    },
+    {
+      "id": "q014",
+      "category": "lexical",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/path-params.md",
+          218,
+          226
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/path-params.md",
+          1,
+          107
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          1,
+          67
+        ],
+        [
+          "fastapi/param_functions.py",
+          1339,
+          1512
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/index.md",
+          1,
+          113
+        ],
+        [
+          "fastapi/routing.py",
+          3215,
+          3329
+        ],
+        [
+          "docs/en/docs/tutorial/body-multiple-params.md",
+          1,
+          124
+        ],
+        [
+          "fastapi/param_functions.py",
+          1,
+          147
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/index.md",
+          84,
+          187
+        ],
+        [
+          "docs/en/docs/tutorial/query-params.md",
+          1,
+          133
+        ],
+        [
+          "docs/en/docs/tutorial/body-multiple-params.md",
+          99,
+          169
+        ]
+      ]
+    },
+    {
+      "id": "q016",
+      "category": "semantic",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/path-params.md",
+          111,
+          123
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/routing.py",
+          3305,
+          3433
+        ],
+        [
+          "docs/en/docs/how-to/custom-request-and-route.md",
+          75,
+          109
+        ],
+        [
+          "docs/en/docs/deployment/docker.md",
+          165,
+          264
+        ],
+        [
+          "fastapi/routing.py",
+          1219,
+          1322
+        ],
+        [
+          "docs/en/docs/deployment/docker.md",
+          255,
+          333
+        ],
+        [
+          "docs/en/docs/advanced/security/oauth2-scopes.md",
+          218,
+          274
+        ],
+        [
+          "fastapi/routing.py",
+          2446,
+          2563
+        ],
+        [
+          "docs/en/docs/how-to/custom-request-and-route.md",
+          1,
+          91
+        ],
+        [
+          "docs_src/security/tutorial004_an_py310.py",
+          114,
+          150
+        ],
+        [
+          "fastapi/applications.py",
+          782,
+          888
+        ]
+      ]
+    },
+    {
+      "id": "q017",
+      "category": "semantic",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/query-params.md",
+          74,
+          110
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/query-params.md",
+          1,
+          133
+        ],
+        [
+          "docs/en/docs/tutorial/query-params.md",
+          113,
+          188
+        ],
+        [
+          "docs/en/docs/tutorial/query-params-str-validations.md",
+          235,
+          371
+        ],
+        [
+          "docs/en/docs/_llm-test.md",
+          1,
+          119
+        ],
+        [
+          "fastapi/param_functions.py",
+          509,
+          663
+        ],
+        [
+          "docs/en/docs/tutorial/query-params-str-validations.md",
+          1,
+          92
+        ],
+        [
+          "docs/en/docs/tutorial/body-nested-models.md",
+          99,
+          221
+        ],
+        [
+          "docs/en/docs/tutorial/query-params-str-validations.md",
+          157,
+          245
+        ],
+        [
+          "docs/en/docs/advanced/opentelemetry.md",
+          1,
+          93
+        ],
+        [
+          "docs/en/docs/tutorial/query-params-str-validations.md",
+          353,
+          450
+        ]
+      ]
+    },
+    {
+      "id": "q019",
+      "category": "semantic",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/background-tasks.md",
+          76,
+          82
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/background-tasks.md",
+          1,
+          80
+        ],
+        [
+          "docs/en/docs/advanced/events.md",
+          1,
+          72
+        ],
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          85,
+          147
+        ],
+        [
+          "docs/en/docs/alternatives.md",
+          77,
+          174
+        ],
+        [
+          "docs/en/docs/history-design-future.md",
+          1,
+          79
+        ],
+        [
+          "docs/en/docs/reference/background.md",
+          1,
+          11
+        ],
+        [
+          "docs/en/docs/advanced/security/http-basic-auth.md",
+          81,
+          107
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          175,
+          256
+        ],
+        [
+          "docs/en/docs/deployment/index.md",
+          1,
+          23
+        ],
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          143,
+          163
+        ]
+      ]
+    },
+    {
+      "id": "q020",
+      "category": "semantic",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/middleware.md",
+          68,
+          89
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/advanced/middleware.md",
+          1,
+          97
+        ],
+        [
+          "docs/en/docs/tutorial/middleware.md",
+          1,
+          95
+        ],
+        [
+          "docs/en/docs/tutorial/cors.md",
+          58,
+          89
+        ],
+        [
+          "docs/en/docs/advanced/events.md",
+          1,
+          72
+        ],
+        [
+          "docs/en/docs/alternatives.md",
+          244,
+          320
+        ],
+        [
+          "docs/en/docs/alternatives.md",
+          77,
+          174
+        ],
+        [
+          "docs/en/docs/advanced/openapi-callbacks.md",
+          1,
+          85
+        ],
+        [
+          "docs/en/docs/how-to/custom-request-and-route.md",
+          1,
+          91
+        ],
+        [
+          "docs/en/docs/advanced/security/oauth2-scopes.md",
+          89,
+          173
+        ],
+        [
+          "docs/en/docs/deployment/docker.md",
+          398,
+          471
+        ]
+      ]
+    },
+    {
+      "id": "q022",
+      "category": "semantic",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/dependencies/sub-dependencies.md",
+          57,
+          72
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/deployment/concepts.md",
+          75,
+          142
+        ],
+        [
+          "docs/en/docs/deployment/concepts.md",
+          128,
+          203
+        ],
+        [
+          "docs/en/docs/advanced/events.md",
+          1,
+          72
+        ],
+        [
+          "docs/en/docs/deployment/concepts.md",
+          195,
+          258
+        ],
+        [
+          "docs/en/docs/deployment/concepts.md",
+          240,
+          306
+        ],
+        [
+          "docs/en/docs/deployment/docker.md",
+          459,
+          528
+        ],
+        [
+          "docs/en/docs/deployment/docker.md",
+          512,
+          575
+        ],
+        [
+          "docs/en/docs/advanced/websockets.md",
+          118,
+          186
+        ],
+        [
+          "fastapi/param_functions.py",
+          2290,
+          2400
+        ],
+        [
+          "docs/en/docs/tutorial/middleware.md",
+          1,
+          95
+        ]
+      ]
+    },
+    {
+      "id": "q023",
+      "category": "semantic",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          187,
+          200
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          85,
+          147
+        ],
+        [
+          "docs/en/docs/advanced/events.md",
+          1,
+          72
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          175,
+          256
+        ],
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          1,
+          95
+        ],
+        [
+          "fastapi/routing.py",
+          632,
+          753
+        ],
+        [
+          "docs/en/docs/advanced/events.md",
+          49,
+          151
+        ],
+        [
+          "docs/en/docs/advanced/custom-response.md",
+          166,
+          267
+        ],
+        [
+          "docs/en/docs/tutorial/middleware.md",
+          1,
+          95
+        ],
+        [
+          "fastapi/routing.py",
+          1044,
+          1151
+        ],
+        [
+          "fastapi/param_functions.py",
+          2290,
+          2400
+        ]
+      ]
+    },
+    {
+      "id": "q025",
+      "category": "semantic",
+      "gold": [
+        [
+          "docs/en/docs/advanced/websockets.md",
+          153,
+          157
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/advanced/websockets.md",
+          118,
+          186
+        ],
+        [
+          "docs_src/websockets_/tutorial003_py310.py",
+          1,
+          81
+        ],
+        [
+          "fastapi/sse.py",
+          104,
+          241
+        ],
+        [
+          "docs/en/docs/deployment/https.md",
+          52,
+          134
+        ],
+        [
+          "fastapi/telemetry/_api.py",
+          180,
+          280
+        ],
+        [
+          "docs/en/docs/tutorial/server-sent-events.md",
+          80,
+          120
+        ],
+        [
+          "docs/en/docs/deployment/https.md",
+          182,
+          231
+        ],
+        [
+          "docs/en/docs/deployment/https.md",
+          118,
+          189
+        ],
+        [
+          "docs/en/docs/advanced/testing-websockets.md",
+          1,
+          13
+        ],
+        [
+          "docs/en/docs/tutorial/cors.md",
+          1,
+          62
+        ]
+      ]
+    },
+    {
+      "id": "q026",
+      "category": "semantic",
+      "gold": [
+        [
+          "docs/en/docs/how-to/conditional-openapi.md",
+          34,
+          50
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/how-to/conditional-openapi.md",
+          1,
+          56
+        ],
+        [
+          "docs/en/docs/how-to/custom-docs-ui-assets.md",
+          158,
+          185
+        ],
+        [
+          "docs/en/docs/how-to/separate-openapi-schemas.md",
+          70,
+          102
+        ],
+        [
+          "docs/en/docs/advanced/opentelemetry.md",
+          158,
+          158
+        ],
+        [
+          "docs/en/docs/async.md",
+          144,
+          210
+        ],
+        [
+          "docs/en/docs/_llm-test.md",
+          113,
+          255
+        ],
+        [
+          "docs/en/docs/tutorial/security/index.md",
+          1,
+          106
+        ],
+        [
+          "docs/en/docs/reference/openapi/docs.md",
+          1,
+          11
+        ],
+        [
+          "docs/en/docs/deployment/docker.md",
+          306,
+          412
+        ],
+        [
+          "docs/en/docs/index.md",
+          46,
+          108
+        ]
+      ]
+    },
+    {
+      "id": "q028",
+      "category": "semantic",
+      "gold": [
+        [
+          "docs/en/docs/how-to/extending-openapi.md",
+          68,
+          76
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/how-to/conditional-openapi.md",
+          1,
+          56
+        ],
+        [
+          "docs/en/docs/alternatives.md",
+          77,
+          174
+        ],
+        [
+          "docs/en/docs/deployment/concepts.md",
+          128,
+          203
+        ],
+        [
+          "docs/en/docs/advanced/events.md",
+          1,
+          72
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          562,
+          693
+        ],
+        [
+          "docs/en/docs/deployment/concepts.md",
+          75,
+          142
+        ],
+        [
+          "docs/en/docs/advanced/generate-clients.md",
+          146,
+          192
+        ],
+        [
+          "docs/en/docs/deployment/docker.md",
+          165,
+          264
+        ],
+        [
+          "fastapi/param_functions.py",
+          1210,
+          1364
+        ],
+        [
+          "docs/en/docs/deployment/concepts.md",
+          1,
+          78
+        ]
+      ]
+    },
+    {
+      "id": "q029",
+      "category": "semantic",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/security/oauth2-jwt.md",
+          135,
+          145
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/security/first-steps.md",
+          103,
+          181
+        ],
+        [
+          "docs/en/docs/tutorial/security/oauth2-jwt.md",
+          75,
+          185
+        ],
+        [
+          "docs_src/dependencies/tutorial012_py310.py",
+          1,
+          25
+        ],
+        [
+          "docs/en/docs/tutorial/security/first-steps.md",
+          1,
+          111
+        ],
+        [
+          "docs_src/security/tutorial001_py310.py",
+          1,
+          11
+        ],
+        [
+          "docs/en/docs/tutorial/security/oauth2-jwt.md",
+          165,
+          271
+        ],
+        [
+          "docs_src/dependencies/tutorial012_an_py310.py",
+          1,
+          27
+        ],
+        [
+          "docs/en/docs/index.md",
+          108,
+          140
+        ],
+        [
+          "docs_src/dependencies/tutorial006_an_py310.py",
+          1,
+          21
+        ],
+        [
+          "docs/en/docs/deployment/fastapicloud.md",
+          1,
+          47
+        ]
+      ]
+    },
+    {
+      "id": "q031",
+      "category": "code",
+      "gold": [
+        [
+          "fastapi/utils.py",
+          26,
+          40
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/routing.py",
+          3410,
+          3535
+        ],
+        [
+          "docs/en/docs/tutorial/response-status-code.md",
+          1,
+          101
+        ],
+        [
+          "docs/en/docs/advanced/additional-status-codes.md",
+          1,
+          41
+        ],
+        [
+          "docs/en/docs/advanced/response-change-status-code.md",
+          1,
+          31
+        ],
+        [
+          "fastapi/routing.py",
+          1044,
+          1151
+        ],
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          1,
+          106
+        ],
+        [
+          "fastapi/routing.py",
+          1129,
+          1242
+        ],
+        [
+          "fastapi/exception_handlers.py",
+          1,
+          34
+        ],
+        [
+          "docs/en/docs/reference/status.md",
+          1,
+          36
+        ],
+        [
+          "docs/en/docs/advanced/strict-content-type.md",
+          1,
+          88
+        ]
+      ]
+    },
+    {
+      "id": "q032",
+      "category": "code",
+      "gold": [
+        [
+          "fastapi/utils.py",
+          95,
+          100
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/routing.py",
+          3509,
+          3636
+        ],
+        [
+          "fastapi/routing.py",
+          5339,
+          5480
+        ],
+        [
+          "fastapi/routing.py",
+          3305,
+          3433
+        ],
+        [
+          "fastapi/applications.py",
+          689,
+          806
+        ],
+        [
+          "fastapi/openapi/utils.py",
+          277,
+          389
+        ],
+        [
+          "fastapi/routing.py",
+          6098,
+          6232
+        ],
+        [
+          "docs/en/docs/advanced/path-operation-advanced-configuration.md",
+          1,
+          91
+        ],
+        [
+          "fastapi/routing.py",
+          4582,
+          4718
+        ],
+        [
+          "fastapi/routing.py",
+          3713,
+          3845
+        ],
+        [
+          "fastapi/routing.py",
+          5231,
+          5363
+        ]
+      ]
+    },
+    {
+      "id": "q034",
+      "category": "code",
+      "gold": [
+        [
+          "fastapi/datastructures.py",
+          153,
+          168
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          280,
+          344
+        ],
+        [
+          "fastapi/utils.py",
+          128,
+          136
+        ],
+        [
+          "fastapi/datastructures.py",
+          94,
+          186
+        ],
+        [
+          "docs/en/docs/tutorial/security/first-steps.md",
+          161,
+          203
+        ],
+        [
+          "docs/en/docs/tutorial/query-params-str-validations.md",
+          78,
+          161
+        ],
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          86,
+          184
+        ],
+        [
+          "fastapi/params.py",
+          163,
+          260
+        ],
+        [
+          "fastapi/utils.py",
+          1,
+          126
+        ],
+        [
+          "docs_src/schema_extra_example/tutorial005_py310.py",
+          1,
+          49
+        ],
+        [
+          "docs/en/docs/tutorial/security/simple-oauth2.md",
+          79,
+          193
+        ]
+      ]
+    },
+    {
+      "id": "q035",
+      "category": "code",
+      "gold": [
+        [
+          "fastapi/encoders.py",
+          59,
+          81
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/encoders.py",
+          1,
+          144
+        ],
+        [
+          "fastapi/param_functions.py",
+          778,
+          948
+        ],
+        [
+          "fastapi/param_functions.py",
+          1720,
+          1897
+        ],
+        [
+          "docs/en/docs/tutorial/extra-data-types.md",
+          1,
+          62
+        ],
+        [
+          "docs/en/docs/python-types.md",
+          228,
+          338
+        ],
+        [
+          "fastapi/param_functions.py",
+          2008,
+          2186
+        ],
+        [
+          "fastapi/param_functions.py",
+          1057,
+          1236
+        ],
+        [
+          "docs_src/schema_extra_example/tutorial005_py310.py",
+          1,
+          49
+        ],
+        [
+          "fastapi/param_functions.py",
+          123,
+          278
+        ],
+        [
+          "docs/en/docs/tutorial/path-params-numeric-validations.md",
+          84,
+          154
+        ]
+      ]
+    },
+    {
+      "id": "q037",
+      "category": "code",
+      "gold": [
+        [
+          "fastapi/security/oauth2.py",
+          401,
+          421
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/security/simple-oauth2.md",
+          169,
+          289
+        ],
+        [
+          "docs/en/docs/how-to/authentication-error-status-code.md",
+          1,
+          17
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          313,
+          453
+        ],
+        [
+          "fastapi/security/oauth2.py",
+          562,
+          693
+        ],
+        [
+          "fastapi/security/open_id_connect_url.py",
+          1,
+          94
+        ],
+        [
+          "docs/en/docs/advanced/security/oauth2-scopes.md",
+          163,
+          230
+        ],
+        [
+          "docs/en/docs/tutorial/security/index.md",
+          1,
+          106
+        ],
+        [
+          "fastapi/security/http.py",
+          149,
+          295
+        ],
+        [
+          "docs/en/docs/advanced/security/oauth2-scopes.md",
+          218,
+          274
+        ],
+        [
+          "docs_src/authentication_error_status_code/tutorial001_an_py310.py",
+          1,
+          21
+        ]
+      ]
+    },
+    {
+      "id": "q038",
+      "category": "code",
+      "gold": [
+        [
+          "fastapi/security/http.py",
+          202,
+          219
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/security/http.py",
+          149,
+          295
+        ],
+        [
+          "docs_src/security/tutorial007_py310.py",
+          1,
+          33
+        ],
+        [
+          "docs/en/docs/advanced/security/http-basic-auth.md",
+          1,
+          91
+        ],
+        [
+          "docs_src/security/tutorial007_an_py310.py",
+          1,
+          36
+        ],
+        [
+          "fastapi/security/http.py",
+          274,
+          417
+        ],
+        [
+          "fastapi/openapi/docs.py",
+          331,
+          389
+        ],
+        [
+          "docs/en/docs/advanced/security/oauth2-scopes.md",
+          163,
+          230
+        ],
+        [
+          "fastapi/security/http.py",
+          1,
+          165
+        ],
+        [
+          "docs_src/security/tutorial006_py310.py",
+          1,
+          11
+        ],
+        [
+          "docs_src/security/tutorial005_py310.py",
+          1,
+          66
+        ]
+      ]
+    },
+    {
+      "id": "q040",
+      "category": "code",
+      "gold": [
+        [
+          "fastapi/dependencies/utils.py",
+          869,
+          885
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/dependencies/utils.py",
+          882,
+          992
+        ],
+        [
+          "fastapi/_compat/shared.py",
+          109,
+          222
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          201,
+          296
+        ],
+        [
+          "fastapi/dependencies/utils.py",
+          795,
+          902
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          139,
+          209
+        ],
+        [
+          "fastapi/openapi/models.py",
+          240,
+          357
+        ],
+        [
+          "fastapi/param_functions.py",
+          1339,
+          1512
+        ],
+        [
+          "fastapi/_compat/shared.py",
+          1,
+          135
+        ],
+        [
+          "fastapi/routing.py",
+          2988,
+          3097
+        ],
+        [
+          "fastapi/_compat/v2.py",
+          231,
+          346
+        ]
+      ]
+    },
+    {
+      "id": "q041",
+      "category": "code",
+      "gold": [
+        [
+          "fastapi/dependencies/utils.py",
+          566,
+          574
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/advanced/events.md",
+          49,
+          151
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          1,
+          102
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          238,
+          290
+        ],
+        [
+          "fastapi/applications.py",
+          1080,
+          1182
+        ],
+        [
+          "fastapi/routing.py",
+          157,
+          263
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          175,
+          256
+        ],
+        [
+          "docs_src/dependencies/tutorial008_py310.py",
+          1,
+          25
+        ],
+        [
+          "docs/en/docs/advanced/events.md",
+          1,
+          72
+        ],
+        [
+          "fastapi/concurrency.py",
+          1,
+          41
+        ],
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          85,
+          147
+        ]
+      ]
+    },
+    {
+      "id": "q043",
+      "category": "code",
+      "gold": [
+        [
+          "docs_src/handling_errors/tutorial004_py310.py",
+          1,
+          26
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          86,
+          184
+        ],
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          1,
+          106
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          82,
+          183
+        ],
+        [
+          "docs/en/docs/reference/exceptions.md",
+          1,
+          20
+        ],
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          168,
+          244
+        ],
+        [
+          "docs/en/docs/advanced/custom-response.md",
+          72,
+          182
+        ],
+        [
+          "docs/en/docs/how-to/custom-request-and-route.md",
+          1,
+          91
+        ],
+        [
+          "docs_src/handling_errors/tutorial006_py310.py",
+          1,
+          28
+        ],
+        [
+          "fastapi/routing.py",
+          157,
+          263
+        ],
+        [
+          "fastapi/applications.py",
+          963,
+          1086
+        ]
+      ]
+    },
+    {
+      "id": "q044",
+      "category": "code",
+      "gold": [
+        [
+          "docs_src/dependencies/tutorial005_py310.py",
+          1,
+          20
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/dependencies/sub-dependencies.md",
+          1,
+          105
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          175,
+          256
+        ],
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          1,
+          95
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+          1,
+          69
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/classes-as-dependencies.md",
+          1,
+          132
+        ],
+        [
+          "fastapi/security/api_key.py",
+          1,
+          154
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/classes-as-dependencies.md",
+          98,
+          288
+        ],
+        [
+          "fastapi/security/api_key.py",
+          131,
+          288
+        ],
+        [
+          "fastapi/param_functions.py",
+          2290,
+          2400
+        ],
+        [
+          "docs/en/docs/tutorial/query-params-str-validations.md",
+          157,
+          245
+        ]
+      ]
+    },
+    {
+      "id": "q046",
+      "category": "multi_chunk",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/background-tasks.md",
+          36,
+          46
+        ],
+        [
+          "fastapi/background.py",
+          41,
+          62
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/background-tasks.md",
+          1,
+          80
+        ],
+        [
+          "docs_src/background_tasks/tutorial002_py310.py",
+          1,
+          24
+        ],
+        [
+          "docs_src/background_tasks/tutorial002_an_py310.py",
+          1,
+          26
+        ],
+        [
+          "fastapi/background.py",
+          1,
+          67
+        ],
+        [
+          "docs_src/background_tasks/tutorial001_py310.py",
+          1,
+          15
+        ],
+        [
+          "docs/en/docs/reference/background.md",
+          1,
+          11
+        ],
+        [
+          "docs/en/docs/tutorial/background-tasks.md",
+          72,
+          86
+        ],
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          143,
+          163
+        ],
+        [
+          "docs/en/docs/advanced/middleware.md",
+          1,
+          97
+        ],
+        [
+          "docs/en/docs/tutorial/security/first-steps.md",
+          161,
+          203
+        ]
+      ]
+    },
+    {
+      "id": "q047",
+      "category": "multi_chunk",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          156,
+          162
+        ],
+        [
+          "fastapi/exception_handlers.py",
+          11,
+          17
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          86,
+          184
+        ],
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          168,
+          244
+        ],
+        [
+          "fastapi/exceptions.py",
+          1,
+          150
+        ],
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          1,
+          106
+        ],
+        [
+          "docs/en/docs/reference/exceptions.md",
+          1,
+          20
+        ],
+        [
+          "docs_src/handling_errors/tutorial004_py310.py",
+          1,
+          26
+        ],
+        [
+          "docs_src/handling_errors/tutorial006_py310.py",
+          1,
+          28
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          82,
+          183
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          175,
+          256
+        ],
+        [
+          "docs_src/handling_errors/tutorial002_py310.py",
+          1,
+          16
+        ]
+      ]
+    },
+    {
+      "id": "q049",
+      "category": "multi_chunk",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          268,
+          288
+        ],
+        [
+          "fastapi/concurrency.py",
+          17,
+          41
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/advanced/events.md",
+          49,
+          151
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          1,
+          102
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          238,
+          290
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          175,
+          256
+        ],
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          85,
+          147
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-with-yield.md",
+          82,
+          183
+        ],
+        [
+          "docs_src/dependencies/tutorial010_py310.py",
+          1,
+          14
+        ],
+        [
+          "fastapi/routing.py",
+          548,
+          649
+        ],
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          143,
+          163
+        ],
+        [
+          "docs/en/docs/advanced/events.md",
+          1,
+          72
+        ]
+      ]
+    },
+    {
+      "id": "q050",
+      "category": "multi_chunk",
+      "gold": [
+        [
+          "docs/en/docs/advanced/websockets.md",
+          101,
+          110
+        ],
+        [
+          "fastapi/routing.py",
+          809,
+          826
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/advanced/websockets.md",
+          118,
+          186
+        ],
+        [
+          "fastapi/exceptions.py",
+          137,
+          256
+        ],
+        [
+          "docs/en/docs/advanced/websockets.md",
+          1,
+          141
+        ],
+        [
+          "docs/en/docs/advanced/opentelemetry.md",
+          81,
+          158
+        ],
+        [
+          "fastapi/exception_handlers.py",
+          1,
+          34
+        ],
+        [
+          "docs/en/docs/tutorial/stream-json-lines.md",
+          1,
+          97
+        ],
+        [
+          "docs/en/docs/reference/websockets.md",
+          1,
+          73
+        ],
+        [
+          "docs/en/docs/tutorial/response-status-code.md",
+          1,
+          101
+        ],
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          86,
+          184
+        ],
+        [
+          "docs_src/app_testing/tutorial002_py310.py",
+          1,
+          31
+        ]
+      ]
+    },
+    {
+      "id": "q052",
+      "category": "multi_chunk",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          90,
+          96
+        ],
+        [
+          "fastapi/applications.py",
+          4834,
+          4838
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/handling-errors.md",
+          86,
+          184
+        ],
+        [
+          "fastapi/routing.py",
+          6499,
+          6527
+        ],
+        [
+          "docs/en/docs/how-to/custom-request-and-route.md",
+          1,
+          91
+        ],
+        [
+          "fastapi/telemetry/_runtime.py",
+          178,
+          238
+        ],
+        [
+          "docs_src/handling_errors/tutorial006_py310.py",
+          1,
+          28
+        ],
+        [
+          "docs/en/docs/tutorial/first-steps.md",
+          251,
+          398
+        ],
+        [
+          "fastapi/routing.py",
+          157,
+          263
+        ],
+        [
+          "fastapi/applications.py",
+          4722,
+          4838
+        ],
+        [
+          "docs_src/custom_request_and_route/tutorial002_py310.py",
+          1,
+          29
+        ],
+        [
+          "docs_src/custom_request_and_route/tutorial002_an_py310.py",
+          1,
+          30
+        ]
+      ]
+    },
+    {
+      "id": "q053",
+      "category": "multi_chunk",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/middleware.md",
+          22,
+          32
+        ],
+        [
+          "fastapi/applications.py",
+          4787,
+          4791
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/middleware.md",
+          1,
+          95
+        ],
+        [
+          "docs/en/docs/advanced/middleware.md",
+          1,
+          97
+        ],
+        [
+          "fastapi/applications.py",
+          1448,
+          1600
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/index.md",
+          1,
+          113
+        ],
+        [
+          "fastapi/routing.py",
+          3075,
+          3225
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/index.md",
+          84,
+          187
+        ],
+        [
+          "docs/en/docs/tutorial/bigger-applications.md",
+          170,
+          278
+        ],
+        [
+          "docs/en/docs/how-to/custom-request-and-route.md",
+          1,
+          91
+        ],
+        [
+          "docs/en/docs/tutorial/dependencies/dependencies-in-path-operation-decorators.md",
+          1,
+          69
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          1,
+          67
+        ]
+      ]
+    },
+    {
+      "id": "q055",
+      "category": "multi_chunk",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/security/oauth2-jwt.md",
+          149,
+          159
+        ],
+        [
+          "docs/en/docs/tutorial/security/get-current-user.md",
+          19,
+          28
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/security/oauth2-jwt.md",
+          165,
+          271
+        ],
+        [
+          "docs/en/docs/tutorial/security/get-current-user.md",
+          1,
+          105
+        ],
+        [
+          "docs_src/security/tutorial002_py310.py",
+          1,
+          30
+        ],
+        [
+          "docs/en/docs/tutorial/security/oauth2-jwt.md",
+          1,
+          101
+        ],
+        [
+          "docs_src/security/tutorial002_an_py310.py",
+          1,
+          32
+        ],
+        [
+          "docs/en/docs/tutorial/security/simple-oauth2.md",
+          169,
+          289
+        ],
+        [
+          "docs_src/security/tutorial004_an_py310.py",
+          114,
+          150
+        ],
+        [
+          "docs/en/docs/tutorial/security/oauth2-jwt.md",
+          75,
+          185
+        ],
+        [
+          "docs_src/security/tutorial004_py310.py",
+          113,
+          143
+        ],
+        [
+          "docs/en/docs/tutorial/security/first-steps.md",
+          161,
+          203
+        ]
+      ]
+    },
+    {
+      "id": "q056",
+      "category": "multi_chunk",
+      "gold": [
+        [
+          "docs/en/docs/advanced/custom-response.md",
+          174,
+          177
+        ],
+        [
+          "docs/en/docs/advanced/stream-data.md",
+          21,
+          27
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/advanced/custom-response.md",
+          166,
+          267
+        ],
+        [
+          "docs/en/docs/advanced/stream-data.md",
+          1,
+          81
+        ],
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          85,
+          147
+        ],
+        [
+          "fastapi/routing.py",
+          632,
+          753
+        ],
+        [
+          "docs_src/stream_data/tutorial001_py310.py",
+          1,
+          65
+        ],
+        [
+          "docs/en/docs/advanced/advanced-dependencies.md",
+          1,
+          95
+        ],
+        [
+          "docs_src/custom_response/tutorial008_py310.py",
+          1,
+          14
+        ],
+        [
+          "docs_src/custom_response/tutorial007_py310.py",
+          1,
+          16
+        ],
+        [
+          "docs_src/stream_data/tutorial002_py310.py",
+          8,
+          54
+        ],
+        [
+          "docs/en/docs/advanced/custom-response.md",
+          1,
+          86
+        ]
+      ]
+    },
+    {
+      "id": "q058",
+      "category": "multi_chunk",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          133,
+          141
+        ],
+        [
+          "fastapi/routing.py",
+          308,
+          335
+        ]
+      ],
+      "hits": [
+        [
+          "fastapi/applications.py",
+          3966,
+          4091
+        ],
+        [
+          "fastapi/routing.py",
+          3410,
+          3535
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          139,
+          209
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          57,
+          147
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          1,
+          67
+        ],
+        [
+          "docs/en/docs/tutorial/response-model.md",
+          201,
+          296
+        ],
+        [
+          "docs/en/docs/advanced/response-directly.md",
+          1,
+          83
+        ],
+        [
+          "docs/en/docs/alternatives.md",
+          244,
+          320
+        ],
+        [
+          "fastapi/applications.py",
+          3526,
+          3655
+        ]
+      ]
+    },
+    {
+      "id": "q059",
+      "category": "multi_chunk",
+      "gold": [
+        [
+          "docs/en/docs/tutorial/bigger-applications.md",
+          90,
+          100
+        ],
+        [
+          "docs/en/docs/tutorial/bigger-applications.md",
+          393,
+          395
+        ]
+      ],
+      "hits": [
+        [
+          "docs/en/docs/tutorial/bigger-applications.md",
+          272,
+          373
+        ],
+        [
+          "docs/en/docs/tutorial/bigger-applications.md",
+          78,
+          187
+        ],
+        [
+          "docs/en/docs/tutorial/bigger-applications.md",
+          358,
+          460
+        ],
+        [
+          "docs/en/docs/tutorial/bigger-applications.md",
+          170,
+          278
+        ],
+        [
+          "docs/en/docs/tutorial/bigger-applications.md",
+          1,
+          92
+        ],
+        [
+          "docs/en/docs/tutorial/testing.md",
+          1,
+          137
+        ],
+        [
+          "docs/en/docs/python-types.md",
+          121,
+          248
+        ],
+        [
+          "docs/en/docs/alternatives.md",
+          312,
+          392
+        ],
+        [
+          "fastapi/routing.py",
+          2152,
+          2260
+        ],
+        [
+          "docs/en/docs/tutorial/bigger-applications.md",
+          438,
+          547
+        ]
+      ]
+    }
+  ],
+  "versions": {
+    "python": "3.12.10",
+    "platform": "Windows-11-10.0.26300-SP0"
+  }
+}

@@ -1,0 +1,216 @@
+{
+  "cairn": {
+    "chunks": 3267,
+    "integrity": {
+      "overall": {
+        "questions": 40,
+        "spans": 50,
+        "spans_intact": 44,
+        "span_rate": 0.88,
+        "question_rate": 0.85
+      },
+      "by_category": {
+        "lexical": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 9,
+          "span_rate": 0.9,
+          "question_rate": 0.9
+        },
+        "semantic": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 9,
+          "span_rate": 0.9,
+          "question_rate": 0.9
+        },
+        "multi_chunk": {
+          "questions": 10,
+          "spans": 20,
+          "spans_intact": 19,
+          "span_rate": 0.95,
+          "question_rate": 0.9
+        },
+        "code": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 7,
+          "span_rate": 0.7,
+          "question_rate": 0.7
+        }
+      }
+    }
+  },
+  "li-default": {
+    "chunks": 1012,
+    "without_offsets": 0,
+    "integrity": {
+      "overall": {
+        "questions": 40,
+        "spans": 50,
+        "spans_intact": 50,
+        "span_rate": 1.0,
+        "question_rate": 1.0
+      },
+      "by_category": {
+        "lexical": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 10,
+          "span_rate": 1.0,
+          "question_rate": 1.0
+        },
+        "semantic": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 10,
+          "span_rate": 1.0,
+          "question_rate": 1.0
+        },
+        "multi_chunk": {
+          "questions": 10,
+          "spans": 20,
+          "spans_intact": 20,
+          "span_rate": 1.0,
+          "question_rate": 1.0
+        },
+        "code": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 10,
+          "span_rate": 1.0,
+          "question_rate": 1.0
+        }
+      }
+    }
+  },
+  "li-sent-512-50": {
+    "chunks": 1440,
+    "without_offsets": 0,
+    "integrity": {
+      "overall": {
+        "questions": 40,
+        "spans": 50,
+        "spans_intact": 44,
+        "span_rate": 0.88,
+        "question_rate": 0.85
+      },
+      "by_category": {
+        "lexical": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 10,
+          "span_rate": 1.0,
+          "question_rate": 1.0
+        },
+        "semantic": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 9,
+          "span_rate": 0.9,
+          "question_rate": 0.9
+        },
+        "multi_chunk": {
+          "questions": 10,
+          "spans": 20,
+          "spans_intact": 17,
+          "span_rate": 0.85,
+          "question_rate": 0.7
+        },
+        "code": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 8,
+          "span_rate": 0.8,
+          "question_rate": 0.8
+        }
+      }
+    }
+  },
+  "li-sent-256-32-nometa": {
+    "chunks": 2555,
+    "without_offsets": 0,
+    "integrity": {
+      "overall": {
+        "questions": 40,
+        "spans": 50,
+        "spans_intact": 27,
+        "span_rate": 0.54,
+        "question_rate": 0.475
+      },
+      "by_category": {
+        "lexical": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 7,
+          "span_rate": 0.7,
+          "question_rate": 0.7
+        },
+        "semantic": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 5,
+          "span_rate": 0.5,
+          "question_rate": 0.5
+        },
+        "multi_chunk": {
+          "questions": 10,
+          "spans": 20,
+          "spans_intact": 11,
+          "span_rate": 0.55,
+          "question_rate": 0.3
+        },
+        "code": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 4,
+          "span_rate": 0.4,
+          "question_rate": 0.4
+        }
+      }
+    }
+  },
+  "li-md-code-30": {
+    "chunks": 2784,
+    "without_offsets": 0,
+    "integrity": {
+      "overall": {
+        "questions": 40,
+        "spans": 50,
+        "spans_intact": 48,
+        "span_rate": 0.96,
+        "question_rate": 0.95
+      },
+      "by_category": {
+        "lexical": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 9,
+          "span_rate": 0.9,
+          "question_rate": 0.9
+        },
+        "semantic": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 10,
+          "span_rate": 1.0,
+          "question_rate": 1.0
+        },
+        "multi_chunk": {
+          "questions": 10,
+          "spans": 20,
+          "spans_intact": 19,
+          "span_rate": 0.95,
+          "question_rate": 0.9
+        },
+        "code": {
+          "questions": 10,
+          "spans": 10,
+          "spans_intact": 10,
+          "span_rate": 1.0,
+          "question_rate": 1.0
+        }
+      }
+    }
+  }
+}
