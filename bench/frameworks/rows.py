@@ -48,3 +48,11 @@ SELECTED = json.loads((Path(__file__).parent / "selected.json").read_text(encodi
 ]
 ROWS["li-bm25-selected"] = {**ROWS["li-" + SELECTED], "retriever": "bm25"}
 ROWS["li-fusion-selected"] = {**ROWS["li-" + SELECTED], "retriever": "fusion"}
+
+# Added after the first fusion rows, to diagnose them (not tuning candidates). With the FAISS L2
+# index of LlamaIndex's own documentation, the vector retriever returns nodes best first but with
+# the raw L2 distance as the score (smaller is better); QueryFusionRetriever re-sorts by score,
+# largest first, and so reverses the dense ranking. An inner-product index has larger-is-better
+# scores. Same vectors (they are unit length), same chunks, only the score direction differs.
+ROWS["li-fusion-default-ip"] = {**ROWS["li-fusion-default"], "faiss": "flat_ip"}
+ROWS["li-fusion-selected-ip"] = {**ROWS["li-fusion-selected"], "faiss": "flat_ip"}

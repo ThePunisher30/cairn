@@ -131,6 +131,7 @@ def build_llamaindex(cfg, root, limit_files=None):
             info["bm25_seconds"] = bm25_build.seconds
             retriever = bm25
             if cfg["retriever"] == "fusion":
+                from llama_index.core.llms import MockLLM
                 from llama_index.core.retrievers import QueryFusionRetriever
 
                 retriever = QueryFusionRetriever(
@@ -140,6 +141,7 @@ def build_llamaindex(cfg, root, limit_files=None):
                     mode="reciprocal_rerank",
                     use_async=False,
                     verbose=False,
+                    llm=MockLLM(),  # required even when num_queries=1 never calls it (else OpenAI)
                 )
     info.update(
         build_seconds=total.seconds,
